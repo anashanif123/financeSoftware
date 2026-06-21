@@ -1,0 +1,472 @@
+// Clearway data model — Neon PostgreSQL via Prisma.
+// Modeled from the real workflow: exporter → customs broker → end customer.
+// Spine of the model: a Shipment carries the cross-document join keys
+// (ARS #, Entry #, Shipment #, B/L #) seen on the broker invoice + CBP 7501.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Enums ───────────────────────────
+
+enum Role {
+  ADMIN // full access
+  OPS // operations: manage shipments/invoices, cannot manage users/settings
+  VIEWER // read-only
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  ARCHIVED
+}
+
+enum ShipmentStatus {
+  OPEN
+  PROCESSING
+  COMPLETED
+  CLOSED
+}
+
+enum DocumentType {
+  SHIPMENT_DOCUMENT
+  CUSTOMS_DOCUMENT // e.g. CBP Form 7501 Entry Summary
+  BROKER_INVOICE // e.g. C.H. Robinson invoice
+  FREIGHT_INVOICE
+  PAYMENT_RECEIPT
+  COMPANY_INVOICE // PDF we generate
+  ATTACHMENT
+  OTHER
+}
+
+enum EmailCategory {
+  SHIPMENT_DOCUMENT
+  CUSTOMS_DOCUMENT
+  BROKER_INVOICE
+  FREIGHT_INVOICE
+  PAYMENT_CONFIRMATION
+  DISPUTE
+  GENERAL
+  UNCLASSIFIED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  SENT
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  OVERDUE
+}
+
+enum CommissionType {
+  FLAT // fixed amount on the invoice
+  PERCENTAGE // % of base cost
+  PER_CONTAINER // amount × container count  (matches the NFK ledger: ~$1,400/ctr)
+  NONE
+}
+
+enum PaymentMethod {
+  WIRE
+  ACH
+  CHECK
+  CARD
+  CASH
+  OTHER
+}
+
+enum DisputeType {
+  WRONG_AMOUNT
+  MISSING_CHARGE
+  INVOICE_ISSUE
+  PAYMENT_ISSUE
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum ActivityType {
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  SHIPMENT_CREATED
+  SHIPMENT_UPDATED
+  DOCUMENT_UPLOADED
+  DOCUMENT_EXTRACTED
+  DOCUMENT_REVIEWED
+  EMAIL_RECEIVED
+  EMAIL_CLASSIFIED
+  INVOICE_CREATED
+  INVOICE_SENT
+  INVOICE_PAID
+  PAYMENT_RECEIVED
+  DISPUTE_OPENED
+  DISPUTE_RESOLVED
+  COMMISSION_UPDATED
+  USER_LOGIN
+  OTHER
+}
+
+// ─────────────────────────── Identity ───────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         Role      @default(ADMIN)
+  avatarUrl    String?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  refreshTokens   RefreshToken[]
+  gmailConnection GmailConnection?
+  uploadedDocs    Document[]       @relation("UploadedBy")
+  activities      Activity[]       @relation("ActivityActor")
+
+  @@index([role])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────── Commercial entities ───────────────────────────
+
+model Customer {
+  id           String   @id @default(cuid())
+  name         String // e.g. OFFPRICE IMPORTS INC, DEIRA TRADING CENTRE
+  code         String?  @unique // short code used in invoices
+  email        String?
+  contactName  String?
+  contactPhone String?
+  address      String?
+  country      String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projects  Project[]
+  shipments Shipment[]
+  invoices  Invoice[]
+
+  @@index([name])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String // e.g. "CARHART 08.04.25"
+  code        String?       @unique
+  status      ProjectStatus @default(ACTIVE)
+  description String?
+  // Free-form reference numbers captured from documents
+  references  Json?         @default("[]")
+  customerId  String?
+  customer    Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  archivedAt  DateTime?
+
+  shipments Shipment[]
+  invoices  Invoice[]
+  documents Document[]
+  emails    Email[]
+
+  @@index([status])
+  @@index([customerId])
+}
+
+model Shipment {
+  id   String @id @default(cuid())
+  // ── Cross-document join keys (the spine) ──
+  shipmentNumber  String? // broker shipment #, e.g. 550773455
+  containerNumber String? // e.g. TCNU5487540
+  entryNumber     String? // CBP entry #, e.g. 791-5968629-9
+  arsNumber       String? // broker reference, e.g. Ars-060-26
+  nfkRef          String? // internal ref, e.g. 281/24-25
+  blNumber        String? // bill of lading, e.g. HLCUKHI260348810
+  masterBill      String?
+  houseBill       String?
+
+  status ShipmentStatus @default(OPEN)
+
+  // ── Logistics detail (from broker invoice / 7501) ──
+  originPort      String?
+  destinationPort String?
+  vessel          String?
+  voyage          String?
+  carrier         String?
+  commodity       String?
+  containerType   String? // e.g. 40HC
+  containerCount  Float   @default(1) // supports half-container shared loads (ledger shows 0.5)
+  weightKg        Float?
+  volumeM3        Float?
+  cartonCount     Int?
+  countryOfOrigin String?
+  sailDate        DateTime?
+  arrivalDate     DateTime?
+  entryDate       DateTime?
+
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents Document[]
+  invoices  Invoice[]
+  emails    Email[]
+  disputes  Dispute[]
+
+  @@index([shipmentNumber])
+  @@index([entryNumber])
+  @@index([arsNumber])
+  @@index([status])
+  @@index([projectId])
+}
+
+// ─────────────────────────── Documents & email ───────────────────────────
+
+model Email {
+  id             String        @id @default(cuid())
+  gmailMessageId String        @unique
+  threadId       String?
+  fromAddress    String
+  fromName       String?
+  toAddress      String?
+  subject        String?
+  snippet        String?       @db.Text
+  body           String?       @db.Text
+  category       EmailCategory @default(UNCLASSIFIED)
+  receivedAt     DateTime
+  processed      Boolean       @default(false)
+  processedAt    DateTime?
+  // Raw AI classification result for audit / debugging
+  aiAnalysis     Json?
+  aiConfidence   Float?
+
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  shipmentId String?
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+
+  documents Document[]
+  payments  Payment[]
+  disputes  Dispute[]
+
+  createdAt DateTime @default(now())
+
+  @@index([category])
+  @@index([processed])
+  @@index([receivedAt])
+}
+
+model Document {
+  id                 String       @id @default(cuid())
+  type               DocumentType @default(OTHER)
+  fileName           String
+  mimeType           String?
+  sizeBytes          Int?
+  cloudinaryUrl      String
+  cloudinaryPublicId String?
+  // OCR / parsed text + structured AI extraction
+  extractedText      String?      @db.Text
+  extractedData      Json?
+  aiConfidence       Float?
+  pageCount          Int?
+
+  // Human review of the AI extraction. Low-confidence docs land in PENDING and
+  // surface in the review queue; high-confidence ones are auto-trusted (AUTO).
+  reviewStatus String    @default("PENDING") // PENDING | AUTO | APPROVED | REJECTED
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewNote   String?
+
+  shipmentId   String?
+  shipment     Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  projectId    String?
+  project      Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  emailId      String?
+  email        Email?    @relation(fields: [emailId], references: [id], onDelete: SetNull)
+  uploadedById String?
+  uploadedBy   User?     @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([shipmentId])
+  @@index([reviewStatus])
+}
+
+// ─────────────────────────── Invoicing & money ───────────────────────────
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique // INV-2026-0001
+  status        InvoiceStatus @default(DRAFT)
+  currency      String        @default("USD")
+
+  // Money — stored as Decimal for accuracy
+  baseCost         Decimal        @default(0) @db.Decimal(14, 2) // duties + freight + broker charges
+  commissionType   CommissionType @default(PER_CONTAINER)
+  commissionRate   Decimal        @default(0) @db.Decimal(14, 2) // % or per-container amount or flat
+  commissionAmount Decimal        @default(0) @db.Decimal(14, 2) // computed
+  totalAmount      Decimal        @default(0) @db.Decimal(14, 2) // baseCost + commissionAmount
+  amountPaid       Decimal        @default(0) @db.Decimal(14, 2)
+
+  issueDate DateTime  @default(now())
+  dueDate   DateTime?
+  sentAt    DateTime?
+  paidAt    DateTime?
+  notes     String?
+
+  pdfUrl          String?
+  pdfPublicId     String?
+  emailMessageId  String? // Gmail id of the sent invoice email
+  deliveryStatus  String? // DRAFT | SENT | DELIVERED | BOUNCED
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  shipmentId String?
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+
+  items    InvoiceItem[]
+  payments Payment[]
+  disputes Dispute[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([customerId])
+  @@index([issueDate])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String // e.g. "Customs Entry Service US", "Total Duties"
+  category    String? // DUTY | FREIGHT | BROKER_FEE | COMMISSION | OTHER
+  quantity    Decimal  @default(1) @db.Decimal(12, 2)
+  unitPrice   Decimal  @default(0) @db.Decimal(14, 2)
+  amount      Decimal  @default(0) @db.Decimal(14, 2)
+  // Provenance: which uploaded document this line came from
+  sourceDocumentId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  invoiceId String?
+  invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  amount    Decimal       @db.Decimal(14, 2)
+  currency  String        @default("USD")
+  method    PaymentMethod @default(WIRE)
+  reference String? // wire/transfer reference
+  paidAt    DateTime      @default(now())
+  notes     String?
+
+  // Provenance: auto-detected from a Gmail payment confirmation
+  detectedByAi Boolean @default(false)
+  emailId      String?
+  email        Email?  @relation(fields: [emailId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([paidAt])
+}
+
+model Dispute {
+  id          String        @id @default(cuid())
+  type        DisputeType   @default(OTHER)
+  status      DisputeStatus @default(OPEN)
+  title       String
+  description String?       @db.Text
+  resolution  String?       @db.Text
+  resolvedAt  DateTime?
+
+  invoiceId  String?
+  invoice    Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  shipmentId String?
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  emailId    String?
+  email      Email?    @relation(fields: [emailId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ─────────────────────────── Cross-cutting ───────────────────────────
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  // Polymorphic target so the timeline can point at any entity
+  entityType  String? // "Invoice" | "Shipment" | ...
+  entityId    String?
+  metadata    Json?
+  actorId     String?
+  actor       User?        @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+
+  @@index([type])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general")
+  updatedAt DateTime @updatedAt
+}
+
+model GmailConnection {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAddress String
+  accessToken  String    @db.Text
+  refreshToken String    @db.Text
+  tokenExpiry  DateTime?
+  scopes       String?
+  historyId    String? // Gmail history cursor for incremental sync
+  isActive     Boolean   @default(true)
+  lastSyncAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}

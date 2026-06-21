@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Design tokens. A restrained, enterprise palette — near-neutral surfaces with a
+  single indigo accent. Light + dark are defined as HSL channels so Tailwind's
+  <alpha-value> opacity utilities work everywhere.
+*/
+@layer base {
+  :root {
+    --background: 240 20% 99%;
+    --foreground: 222 30% 11%;
+    --surface: 0 0% 100%;
+    --surface-muted: 240 20% 97%;
+    --muted: 240 16% 94%;
+    --muted-foreground: 220 12% 46%;
+    --border: 220 18% 90%;
+    --input: 220 18% 88%;
+    --ring: 243 75% 59%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --success: 152 56% 40%;
+    --warning: 38 92% 50%;
+    --danger: 0 72% 51%;
+  }
+
+  .dark {
+    --background: 224 36% 6%;
+    --foreground: 220 22% 92%;
+    --surface: 223 32% 9%;
+    --surface-muted: 223 28% 12%;
+    --muted: 223 24% 16%;
+    --muted-foreground: 220 12% 60%;
+    --border: 223 22% 18%;
+    --input: 223 22% 20%;
+    --ring: 243 75% 66%;
+    --primary: 243 80% 67%;
+    --primary-foreground: 224 36% 6%;
+    --success: 152 52% 50%;
+    --warning: 38 92% 56%;
+    --danger: 0 72% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  h1, h2, h3, h4 {
+    @apply tracking-[-0.02em];
+  }
+
+  /* Refined scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted rounded-full border-2 border-solid;
+    border-color: transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/40; }
+}
+
+@layer components {
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-muted;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* Focus ring used across interactive elements */
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}
