@@ -43,7 +43,7 @@ export function Emails() {
         actions={<Button variant="secondary" loading={syncing} onClick={sync}><RefreshCw className="h-4 w-4" /> Sync now</Button>}
       />
       <Card>
-        <div className="flex items-center gap-3 border-b border-border p-4">
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
           <Select value={category} onChange={(e) => setCategory(e.target.value)} className="max-w-[220px]">
             {CATS.map((c) => (
               <option key={c} value={c}>{c ? c.replace(/_/g, ' ').toLowerCase() : 'All categories'}</option>

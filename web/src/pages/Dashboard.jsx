@@ -9,6 +9,7 @@ import {
   Mail,
   CreditCard,
   Activity as ActivityIcon,
+  ArrowUpRight,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -16,92 +17,96 @@ import { CardSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { useStats, useCharts, useRecent } from '@/hooks/useApi';
+import { useAuth } from '@/store/auth';
 import { formatCompactCurrency, formatCurrency, formatNumber, timeAgo } from '@/lib/format';
 
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export function Dashboard() {
+  const { user } = useAuth();
   const { data: stats, isLoading } = useStats();
   const { data: charts } = useCharts(6);
   const { data: recent } = useRecent();
   const s = stats?.data;
   const series = charts?.data || [];
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
-    <div className="animate-fade-in space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Your logistics operation at a glance.</p>
+    <div className="space-y-7">
+      {/* Hero */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">{today}</p>
+          <h1 className="mt-1.5 text-[28px] font-semibold leading-tight">
+            {greeting()},{' '}
+            <span className="text-gradient">{(user?.name || 'there').split(' ')[0]}</span>
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Here’s how your logistics operation is tracking today.
+          </p>
+        </div>
+        <Link
+          to="/reports"
+          className="inline-flex items-center gap-1.5 self-start rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium transition-colors hover:border-primary/30 hover:bg-surface-muted"
+        >
+          View reports <ArrowUpRight className="h-4 w-4" />
+        </Link>
       </div>
 
-      {/* Metric cards */}
+      {/* Primary KPIs */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
         ) : (
-          <>
-            <StatCard label="Revenue (paid)" value={formatCompactCurrency(s?.revenue)} icon={CircleDollarSign} tone="success" />
-            <StatCard label="Outstanding" value={formatCompactCurrency(s?.outstanding)} icon={Clock} tone="warning" />
-            <StatCard label="Commission earned" value={formatCompactCurrency(s?.commissionEarned)} icon={TrendingUp} tone="primary" />
-            <StatCard label="Pending invoices" value={formatNumber(s?.pendingInvoices)} icon={Receipt} tone="neutral" hint={`${formatNumber(s?.paidInvoices)} paid`} />
-          </>
+          [
+            { label: 'Revenue (paid)', value: formatCompactCurrency(s?.revenue), icon: CircleDollarSign, tone: 'success' },
+            { label: 'Outstanding', value: formatCompactCurrency(s?.outstanding), icon: Clock, tone: 'warning' },
+            { label: 'Commission earned', value: formatCompactCurrency(s?.commissionEarned), icon: TrendingUp, tone: 'accent' },
+            { label: 'Pending invoices', value: formatNumber(s?.pendingInvoices), icon: Receipt, tone: 'primary', hint: `${formatNumber(s?.paidInvoices)} paid` },
+          ].map((c, i) => (
+            <div key={c.label} className="animate-rise" style={{ animationDelay: `${i * 0.06}s` }}>
+              <StatCard {...c} />
+            </div>
+          ))
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
-        ) : (
-          <>
-            <StatCard label="Projects" value={formatNumber(s?.totalProjects)} icon={FolderKanban} tone="primary" />
-            <StatCard label="Shipments" value={formatNumber(s?.totalShipments)} icon={Ship} tone="primary" />
-            <StatCard label="Paid invoices" value={formatNumber(s?.paidInvoices)} icon={Receipt} tone="success" />
-            <StatCard label="Pending invoices" value={formatNumber(s?.pendingInvoices)} icon={Clock} tone="warning" />
-          </>
-        )}
+
+      {/* Operations mini-strip */}
+      <div className="grid grid-cols-3 gap-4">
+        <MiniStat to="/projects" label="Projects" value={formatNumber(s?.totalProjects)} icon={FolderKanban} loading={isLoading} />
+        <MiniStat to="/shipments" label="Shipments" value={formatNumber(s?.totalShipments)} icon={Ship} loading={isLoading} />
+        <MiniStat to="/invoices" label="Paid invoices" value={formatNumber(s?.paidInvoices)} icon={Receipt} loading={isLoading} />
       </div>
 
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue trend</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <TrendChart data={series} dataKey="revenue" formatter={(v) => formatCurrency(v)} color="hsl(var(--success))" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Payments received</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <TrendChart data={series} dataKey="payments" formatter={(v) => formatCurrency(v)} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Invoices issued</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <TrendChart data={series} dataKey="invoices" formatter={formatNumber} color="hsl(243 75% 59%)" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Shipments created</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <TrendChart data={series} dataKey="shipments" formatter={formatNumber} color="hsl(190 80% 45%)" />
-          </CardContent>
-        </Card>
+        <ChartCard title="Revenue trend">
+          <TrendChart data={series} dataKey="revenue" formatter={(v) => formatCurrency(v)} color="hsl(var(--success))" />
+        </ChartCard>
+        <ChartCard title="Payments received">
+          <TrendChart data={series} dataKey="payments" formatter={(v) => formatCurrency(v)} color="hsl(var(--primary))" />
+        </ChartCard>
+        <ChartCard title="Invoices issued">
+          <TrendChart data={series} dataKey="invoices" formatter={formatNumber} color="hsl(var(--accent))" />
+        </ChartCard>
+        <ChartCard title="Shipments created">
+          <TrendChart data={series} dataKey="shipments" formatter={formatNumber} color="hsl(190 70% 42%)" />
+        </ChartCard>
       </div>
 
       {/* Activity feeds */}
       <div className="grid gap-4 lg:grid-cols-3">
         <FeedCard title="Recent activity" icon={ActivityIcon}>
           {recent?.data?.activities?.length ? (
-            <ul className="space-y-3">
+            <ul className="space-y-3.5">
               {recent.data.activities.map((a) => (
                 <li key={a.id} className="flex items-start gap-3">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary ring-4 ring-primary/10" />
                   <div className="min-w-0">
                     <p className="truncate text-sm text-foreground">{a.description}</p>
                     <p className="text-xs text-muted-foreground">{timeAgo(a.createdAt)}</p>
@@ -116,7 +121,7 @@ export function Dashboard() {
 
         <FeedCard title="Recent emails" icon={Mail} href="/emails">
           {recent?.data?.emails?.length ? (
-            <ul className="space-y-3">
+            <ul className="space-y-3.5">
               {recent.data.emails.map((e) => (
                 <li key={e.id} className="min-w-0">
                   <div className="flex items-center justify-between gap-2">
@@ -134,14 +139,14 @@ export function Dashboard() {
 
         <FeedCard title="Recent payments" icon={CreditCard} href="/payments">
           {recent?.data?.payments?.length ? (
-            <ul className="space-y-3">
+            <ul className="space-y-3.5">
               {recent.data.payments.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{p.invoice?.customer?.name || 'Payment'}</p>
-                    <p className="truncate text-xs text-muted-foreground">{p.invoice?.invoiceNumber}</p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">{p.invoice?.invoiceNumber}</p>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold text-success">{formatCurrency(p.amount, p.currency)}</span>
+                  <span className="shrink-0 font-display text-sm font-semibold text-success">{formatCurrency(p.amount, p.currency)}</span>
                 </li>
               ))}
             </ul>
@@ -154,12 +159,44 @@ export function Dashboard() {
   );
 }
 
+function MiniStat({ to, label, value, icon: Icon, loading }) {
+  return (
+    <Link to={to}>
+      <Card hover className="flex items-center gap-3 p-4">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-xs text-muted-foreground">{label}</p>
+          {loading ? (
+            <Skeleton className="mt-1 h-5 w-10" />
+          ) : (
+            <p className="font-display text-lg font-semibold leading-tight">{value}</p>
+          )}
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
+function ChartCard({ title, children }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <span className="text-[11px] font-medium text-muted-foreground">Last 6 months</span>
+      </CardHeader>
+      <CardContent className="pt-2">{children}</CardContent>
+    </Card>
+  );
+}
+
 function FeedCard({ title, icon: Icon, href, children }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" /> {title}
+          <Icon className="h-4 w-4 text-primary" /> {title}
         </CardTitle>
         {href && (
           <Link to={href} className="text-xs font-medium text-primary hover:underline">
@@ -174,7 +211,7 @@ function FeedCard({ title, icon: Icon, href, children }) {
 
 function FeedEmpty({ label }) {
   return (
-    <div className="py-6 text-center text-sm text-muted-foreground">
+    <div className="py-8 text-center text-sm text-muted-foreground">
       <Skeleton className="mx-auto mb-3 h-8 w-8 rounded-full opacity-40" />
       {label}
     </div>

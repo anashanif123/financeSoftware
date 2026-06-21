@@ -17,9 +17,13 @@ function monthLabel(key) {
 function CustomTooltip({ active, payload, label, formatter }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs shadow-pop">
-      <p className="mb-1 font-medium text-muted-foreground">{monthLabel(label)}</p>
-      <p className="font-semibold text-foreground">{formatter ? formatter(payload[0].value) : payload[0].value}</p>
+    <div className="rounded-xl border border-border bg-surface px-3.5 py-2.5 shadow-pop">
+      <p className="mb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {monthLabel(label)}
+      </p>
+      <p className="font-display text-base font-semibold text-foreground">
+        {formatter ? formatter(payload[0].value) : payload[0].value}
+      </p>
     </div>
   );
 }
@@ -28,24 +32,41 @@ export function TrendChart({ data = [], dataKey, color = 'hsl(var(--primary))', 
   const gradientId = `grad-${dataKey}`;
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+            <stop offset="0%" stopColor={color} stopOpacity={0.32} />
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <CartesianGrid strokeDasharray="2 6" stroke="hsl(var(--border))" vertical={false} />
         <XAxis
           dataKey="month"
           tickFormatter={monthLabel}
           tickLine={false}
           axisLine={false}
+          dy={6}
           tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
         />
-        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={48} />
-        <Tooltip content={<CustomTooltip formatter={formatter} />} cursor={{ stroke: 'hsl(var(--border))' }} />
-        <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} />
+        <YAxis
+          tickLine={false}
+          axisLine={false}
+          tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+          width={48}
+        />
+        <Tooltip
+          content={<CustomTooltip formatter={formatter} />}
+          cursor={{ stroke: 'hsl(var(--primary) / 0.4)', strokeWidth: 1, strokeDasharray: '4 4' }}
+        />
+        <Area
+          type="monotone"
+          dataKey={dataKey}
+          stroke={color}
+          strokeWidth={2.5}
+          fill={`url(#${gradientId})`}
+          dot={false}
+          activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--surface))', fill: color }}
+        />
       </AreaChart>
     </ResponsiveContainer>
   );

@@ -36,7 +36,7 @@ export function Customers() {
     <div className="animate-fade-in">
       <PageHeader title="Customers" description="The end customers you invoice." actions={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> New customer</Button>} />
       <Card>
-        <div className="flex items-center gap-3 border-b border-border p-4">
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
           <Input icon={Search} placeholder="Search customers…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         </div>
         {isLoading ? (

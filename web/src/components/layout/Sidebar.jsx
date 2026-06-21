@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { motion, LayoutGroup } from 'framer-motion';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -10,67 +11,116 @@ import {
   AlertTriangle,
   Users,
   Settings,
-  Boxes,
   ClipboardCheck,
   Scale,
+  Anchor,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/projects', label: 'Projects', icon: FolderKanban },
-  { to: '/shipments', label: 'Shipments', icon: Ship },
-  { to: '/documents', label: 'Documents', icon: FileText },
-  { to: '/review', label: 'Review', icon: ClipboardCheck },
-  { to: '/invoices', label: 'Invoices', icon: Receipt },
-  { to: '/payments', label: 'Payments', icon: CreditCard },
-  { to: '/emails', label: 'Inbox', icon: Mail },
-  { to: '/disputes', label: 'Disputes', icon: AlertTriangle },
-  { to: '/reports', label: 'Reports', icon: Scale },
-  { to: '/customers', label: 'Customers', icon: Users },
+// Grouped navigation reads like a real operations console, not a flat list.
+const GROUPS = [
+  {
+    label: 'Overview',
+    items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true }],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { to: '/projects', label: 'Projects', icon: FolderKanban },
+      { to: '/shipments', label: 'Shipments', icon: Ship },
+      { to: '/documents', label: 'Documents', icon: FileText },
+      { to: '/review', label: 'Review', icon: ClipboardCheck },
+      { to: '/emails', label: 'Inbox', icon: Mail },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { to: '/invoices', label: 'Invoices', icon: Receipt },
+      { to: '/payments', label: 'Payments', icon: CreditCard },
+      { to: '/disputes', label: 'Disputes', icon: AlertTriangle },
+      { to: '/reports', label: 'Reports', icon: Scale },
+    ],
+  },
+  {
+    label: 'Directory',
+    items: [{ to: '/customers', label: 'Customers', icon: Users }],
+  },
 ];
+
+function NavItem({ to, label, icon: Icon, end, onNavigate }) {
+  return (
+    <NavLink to={to} end={end} onClick={onNavigate} className="group relative block">
+      {({ isActive }) => (
+        <span
+          className={cn(
+            'relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200',
+            isActive
+              ? 'text-primary'
+              : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+          )}
+        >
+          {isActive && (
+            <motion.span
+              layoutId="nav-active"
+              transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+              className="absolute inset-0 -z-10 rounded-xl bg-primary/10 ring-1 ring-inset ring-primary/15"
+            />
+          )}
+          {isActive && (
+            <motion.span
+              layoutId="nav-bar"
+              transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+              className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-primary"
+            />
+          )}
+          <Icon className={cn('h-[18px] w-[18px] transition-transform duration-200', !isActive && 'group-hover:scale-110')} />
+          {label}
+        </span>
+      )}
+    </NavLink>
+  );
+}
 
 export function Sidebar({ onNavigate }) {
   return (
     <div className="flex h-full flex-col">
       {/* Brand */}
       <div className="flex h-16 items-center gap-2.5 px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Boxes className="h-5 w-5" />
+        <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
+          <Anchor className="h-[18px] w-[18px]" />
+          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-surface" />
         </div>
-        <span className="text-[15px] font-semibold tracking-tight">Clearway</span>
+        <span className="font-display text-lg font-semibold tracking-tight">Clearway</span>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )
-            }
-          >
-            <Icon className="h-[18px] w-[18px]" />
-            {label}
-          </NavLink>
-        ))}
-      </nav>
+      <LayoutGroup>
+        <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-3">
+          {GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <NavItem key={item.to} {...item} onNavigate={onNavigate} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </LayoutGroup>
 
-      <div className="px-3 py-2">
+      <div className="border-t border-border/70 px-3 py-3">
         <NavLink
           to="/settings"
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
             )
           }
         >

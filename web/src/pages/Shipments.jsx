@@ -24,7 +24,7 @@ export function Shipments() {
     <div className="animate-fade-in">
       <PageHeader title="Shipments" description="Every container, entry and bill of lading — auto-linked across documents." />
       <Card>
-        <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
           <Input icon={Search} placeholder="Search by shipment, container, entry, ARS…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
           <Select value={status} onChange={(e) => setStatus(e.target.value)} className="max-w-[160px]">
             {STATUSES.map((s) => (

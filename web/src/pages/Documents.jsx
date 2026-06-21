@@ -22,7 +22,7 @@ export function Documents() {
     <div className="animate-fade-in">
       <PageHeader title="Document Center" description="Every shipment, customs and invoice file — stored on Cloudinary, parsed by AI." />
       <Card>
-        <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
           <Input icon={Search} placeholder="Search file name…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
           <Select value={type} onChange={(e) => setType(e.target.value)} className="max-w-[200px]">
             {TYPES.map((t) => (

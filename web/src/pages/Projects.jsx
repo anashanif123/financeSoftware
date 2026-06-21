@@ -51,7 +51,7 @@ export function Projects() {
       />
 
       <Card>
-        <div className="flex items-center gap-3 border-b border-border p-4">
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
           <Input
             icon={Search}
             placeholder="Search projects…"

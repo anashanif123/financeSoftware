@@ -170,7 +170,7 @@ function Row({ label, value, bold, accent, muted }) {
   return (
     <div className="flex items-center justify-between">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={[bold && 'text-base font-semibold', accent && 'text-primary', muted && 'text-muted-foreground', 'tabular-nums'].filter(Boolean).join(' ')}>{value}</dd>
+      <dd className={[bold && 'font-display text-lg font-semibold', accent && 'text-primary', muted && 'text-muted-foreground', 'tabular-nums'].filter(Boolean).join(' ')}>{value}</dd>
     </div>
   );
 }

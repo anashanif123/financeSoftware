@@ -1,12 +1,13 @@
 import { cn } from '@/lib/cn';
 
-// Tone presets mapped to status semantics.
+// Tone presets mapped to status semantics. Soft tinted fill + ring for depth.
 const tones = {
-  neutral: 'bg-muted text-muted-foreground',
-  primary: 'bg-primary/10 text-primary',
-  success: 'bg-success/12 text-success',
-  warning: 'bg-warning/15 text-[hsl(var(--warning))]',
-  danger: 'bg-danger/12 text-danger',
+  neutral: 'bg-muted text-muted-foreground ring-1 ring-inset ring-border',
+  primary: 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/20',
+  accent: 'bg-accent/15 text-[hsl(var(--accent-foreground))] ring-1 ring-inset ring-accent/30',
+  success: 'bg-success/12 text-success ring-1 ring-inset ring-success/20',
+  warning: 'bg-warning/15 text-[hsl(var(--warning))] ring-1 ring-inset ring-warning/25',
+  danger: 'bg-danger/12 text-danger ring-1 ring-inset ring-danger/20',
 };
 
 // Map domain statuses → tone so colours stay consistent everywhere.
@@ -38,7 +39,7 @@ export function Badge({ children, tone, status, className }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium',
         tones[resolved],
         className,
       )}

@@ -24,7 +24,7 @@ export function Invoices() {
     <div className="animate-fade-in">
       <PageHeader title="Invoices" description="Company invoices with commission, delivery and payment status." />
       <Card>
-        <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
           <Input icon={Search} placeholder="Search invoice number…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
           <Select value={status} onChange={(e) => setStatus(e.target.value)} className="max-w-[170px]">
             {STATUSES.map((s) => (

@@ -4,19 +4,20 @@ import { cn } from '@/lib/cn';
 
 const variants = {
   primary:
-    'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20',
+    'bg-primary text-primary-foreground shadow-sm shadow-primary/25 hover:shadow-glow hover:brightness-110',
   secondary:
-    'bg-surface text-foreground border border-border hover:bg-surface-muted',
+    'bg-surface text-foreground border border-border hover:bg-surface-muted hover:border-primary/30',
   ghost: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-  danger: 'bg-danger text-white hover:bg-danger/90',
-  outline: 'border border-border text-foreground hover:bg-surface-muted',
+  danger: 'bg-danger text-white shadow-sm shadow-danger/25 hover:brightness-110',
+  outline: 'border border-border text-foreground hover:bg-surface-muted hover:border-primary/30',
+  accent: 'bg-accent text-accent-foreground shadow-sm shadow-accent/25 hover:brightness-105',
 };
 
 const sizes = {
-  sm: 'h-8 px-3 text-sm gap-1.5',
-  md: 'h-9.5 px-4 text-sm gap-2',
-  lg: 'h-11 px-5 text-[15px] gap-2',
-  icon: 'h-9 w-9',
+  sm: 'h-8 px-3 text-sm gap-1.5 rounded-lg',
+  md: 'h-10 px-4 text-sm gap-2 rounded-xl',
+  lg: 'h-12 px-6 text-[15px] gap-2 rounded-xl',
+  icon: 'h-10 w-10 rounded-xl',
 };
 
 export const Button = forwardRef(function Button(
@@ -28,7 +29,7 @@ export const Button = forwardRef(function Button(
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        'focus-ring inline-flex select-none items-center justify-center rounded-lg font-medium transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50',
+        'focus-ring inline-flex select-none items-center justify-center font-medium transition-all duration-200 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50',
         variants[variant],
         sizes[size],
         className,

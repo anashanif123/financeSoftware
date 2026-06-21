@@ -1,20 +1,29 @@
 import { cn } from '@/lib/cn';
 
-export function Card({ className, ...props }) {
+export function Card({ className, hover, ...props }) {
   return (
     <div
-      className={cn('rounded-xl border border-border bg-surface shadow-soft', className)}
+      className={cn(
+        'rounded-2xl border border-border bg-surface shadow-soft',
+        hover && 'card-hover',
+        className,
+      )}
       {...props}
     />
   );
 }
 
 export function CardHeader({ className, ...props }) {
-  return <div className={cn('flex items-center justify-between gap-3 px-5 pt-5', className)} {...props} />;
+  return <div className={cn('flex items-center justify-between gap-3 px-6 pt-5', className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }) {
-  return <h3 className={cn('text-sm font-semibold text-foreground', className)} {...props} />;
+  return (
+    <h3
+      className={cn('text-[13px] font-semibold uppercase tracking-wide text-muted-foreground', className)}
+      {...props}
+    />
+  );
 }
 
 export function CardDescription({ className, ...props }) {
@@ -22,5 +31,5 @@ export function CardDescription({ className, ...props }) {
 }
 
 export function CardContent({ className, ...props }) {
-  return <div className={cn('p-5', className)} {...props} />;
+  return <div className={cn('p-6', className)} {...props} />;
 }

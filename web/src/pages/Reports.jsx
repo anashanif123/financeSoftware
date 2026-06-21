@@ -66,19 +66,19 @@ export function Reports() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">Invoiced</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{formatCurrency(summary?.billedTotal || 0)}</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums">{formatCurrency(summary?.billedTotal || 0)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">Received</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-success">{formatCurrency(summary?.paid || 0)}</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-success">{formatCurrency(summary?.paid || 0)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">Outstanding</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-warning">{formatCurrency(summary?.outstanding || 0)}</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-warning">{formatCurrency(summary?.outstanding || 0)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">Commission</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-primary">{formatCurrency(summary?.commission || 0)}</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-primary">{formatCurrency(summary?.commission || 0)}</p>
         </Card>
       </div>
 
