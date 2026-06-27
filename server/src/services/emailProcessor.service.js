@@ -53,17 +53,17 @@ async function extractFromAttachment({ buffer, att, uploaded, emailText, hint })
 // Find or create the shipment that a document/email belongs to, matching on
 // the cross-document join keys (ARS #, entry #, shipment #, B/L #).
 async function matchOrCreateShipment(extracted) {
-  if (!extracted) return null;
+  if (!extracted) return { shipment: null, isNew: false };
   const keys = [
     extracted.shipmentNumber && { shipmentNumber: extracted.shipmentNumber },
     extracted.entryNumber && { entryNumber: extracted.entryNumber },
     extracted.arsNumber && { arsNumber: extracted.arsNumber },
     extracted.blNumber && { blNumber: extracted.blNumber },
   ].filter(Boolean);
-  if (!keys.length) return null;
+  if (!keys.length) return { shipment: null, isNew: false };
 
   const found = await prisma.shipment.findFirst({ where: { OR: keys } });
-  if (found) return found;
+  if (found) return { shipment: found, isNew: false };
 
   const created = await prisma.shipment.create({
     data: {
@@ -92,7 +92,29 @@ async function matchOrCreateShipment(extracted) {
     entityId: created.id,
     metadata: { source: 'gmail' },
   });
-  return created;
+  return { shipment: created, isNew: true };
+}
+
+// Doc types that must ALWAYS be human-reviewed (the operator assigns the ARS #,
+// links projects, and confirms the figures before they feed an invoice).
+const ALWAYS_REVIEW_TYPES = new Set([
+  'SHIPMENT_DOCUMENT',
+  'CUSTOMS_DOCUMENT',
+  'BROKER_INVOICE',
+  'FREIGHT_INVOICE',
+]);
+
+// Has this exact source document already been ingested? Match on the strongest
+// identifiers AND the same doc type — so a re-sent 7501 is a duplicate, but the
+// 7501 and the broker invoice for the same shipment are NOT (different types).
+async function findDuplicateDocument(extracted, docType) {
+  if (!extracted) return null;
+  const ors = [];
+  for (const f of ['entryNumber', 'blNumber', 'shipmentNumber', 'arsNumber']) {
+    if (extracted[f]) ors.push({ extractedData: { path: [f], equals: extracted[f] } });
+  }
+  if (!ors.length) return null;
+  return prisma.document.findFirst({ where: { type: docType, OR: ors }, orderBy: { createdAt: 'asc' } });
 }
 
 // Process a single normalised email record end-to-end.
@@ -145,11 +167,29 @@ export async function processEmail(connection, msg) {
         emailText: msg.body || msg.snippet || '',
         hint,
       });
-      if (!shipment) shipment = await matchOrCreateShipment(extracted);
+      // Trust the DOCUMENT's own extracted type over the email category — a broker
+      // invoice attached to a generic email is still a BROKER_INVOICE, not a shipment doc.
+      const docType =
+        CATEGORY_TO_DOC_TYPE[extracted?.documentType] || CATEGORY_TO_DOC_TYPE[email.category] || 'OTHER';
+
+      if (!shipment) {
+        const match = await matchOrCreateShipment(extracted);
+        shipment = match.shipment;
+      }
+
+      // Duplicate guard: flag if this same document type + identifiers already exist.
+      const duplicateOf = await findDuplicateDocument(extracted, docType);
+
+      // Route to the human review queue when it's a critical doc, a duplicate, or
+      // the AI was not confident. Otherwise auto-trust high-confidence extractions.
+      const reviewStatus =
+        ALWAYS_REVIEW_TYPES.has(docType) || duplicateOf
+          ? 'PENDING'
+          : reviewStatusFor(extracted?.confidence);
 
       await prisma.document.create({
         data: {
-          type: CATEGORY_TO_DOC_TYPE[email.category] || 'OTHER',
+          type: docType,
           fileName: att.filename,
           mimeType: att.mimeType,
           sizeBytes: buffer.length,
@@ -157,16 +197,19 @@ export async function processEmail(connection, msg) {
           cloudinaryPublicId: uploaded.publicId,
           pageCount: uploaded.pages || null,
           extractedText: docText || null,
-          extractedData: extracted,
+          extractedData: { ...(extracted || {}), _duplicateOf: duplicateOf?.id || null },
           aiConfidence: extracted?.confidence ?? null,
-          reviewStatus: reviewStatusFor(extracted?.confidence),
+          reviewStatus,
+          reviewNote: duplicateOf ? `Possible duplicate of document ${duplicateOf.id}` : null,
           emailId: email.id,
           shipmentId: shipment?.id || null,
         },
       });
       await logActivity({
         type: 'DOCUMENT_EXTRACTED',
-        description: `Document "${att.filename}" processed (${email.category})`,
+        description: duplicateOf
+          ? `⚠️ Possible DUPLICATE "${att.filename}" (${docType})`
+          : `Document "${att.filename}" processed (${docType})`,
         entityType: 'Document',
         entityId: email.id,
       });

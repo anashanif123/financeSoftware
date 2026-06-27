@@ -8,9 +8,26 @@ import { logger } from '../config/logger.js';
 //   2. extract structured shipment/invoice/payment fields from text
 // All calls request strict JSON and degrade gracefully when no key is set.
 
-const EXTRACTION_SYSTEM = `You are a logistics & customs document parser for a freight brokerage.
-Extract data from shipment documents, customs forms (CBP 7501), broker/freight invoices and payment confirmations.
-Return ONLY valid JSON matching the requested schema. Use null for unknown fields. Never invent values.`;
+const EXTRACTION_SYSTEM = `You are an expert customs & freight document parser for a brokerage (exporter NFK, US broker C.H. Robinson).
+You read three document kinds — set "documentType" precisely:
+
+1. CBP 7501 "Entry Summary" (customs) → documentType = CUSTOMS_DOCUMENT.
+   Find: Entry Number (box 1, e.g. 791-5968629-9), Importer of Record (box 30), B/L or AWB (box 12),
+   country of origin, commodity description, total Duty (box 41), MPF, and Total (box 44, e.g. 19,781.22).
+
+2. C.H. Robinson broker invoice → documentType = BROKER_INVOICE.
+   Find: Invoice Number (top), Shipment Number, Reference / Customer Reference (e.g. Ars-060-26),
+   Entry Number, BL#, container number + type + QTY, consignee, the RATES & ACCESSORIALS lines
+   (each description + amount), and Amount Due / Sub-Total.
+
+3. Bill of lading / shipment doc → documentType = SHIPMENT_DOCUMENT (container, vessel, voyage, ports, BL).
+
+RULES:
+- Transcribe every number EXACTLY as printed; never round or guess digits.
+- Use null for any field you cannot clearly read. NEVER invent a value.
+- Put the broker reference like "Ars-060-26" in arsNumber.
+- Set "confidence" honestly: lower it when the scan is blurry or a field is ambiguous.
+Return ONLY valid JSON matching the requested schema.`;
 
 // Shape we ask the model to fill. Mirrors the Shipment + Invoice columns.
 const EXTRACTION_SCHEMA = {
@@ -106,7 +123,7 @@ export async function extractDocumentDataFromImages(imageUrls = [], hint = '') {
   if (!urls.length) return { confidence: 0, empty: true };
 
   const completion = await openai.chat.completions.create({
-    model: env.OPENAI_MODEL,
+    model: env.OPENAI_VISION_MODEL,
     temperature: 0,
     response_format: { type: 'json_object' },
     messages: [

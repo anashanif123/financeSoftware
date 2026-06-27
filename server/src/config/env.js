@@ -24,6 +24,8 @@ const schema = z.object({
 
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  // Vision reads scanned/photographed docs (7501, ledgers) far better on the full model.
+  OPENAI_VISION_MODEL: z.string().default('gpt-4o'),
 
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
