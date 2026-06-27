@@ -75,9 +75,9 @@ export function Login() {
           Create one
         </Link>
       </p>
-      <div className="mt-6 rounded-lg border border-border bg-surface-muted px-3 py-2.5 text-center text-xs text-muted-foreground">
+      {/* <div className="mt-6 rounded-lg border border-border bg-surface-muted px-3 py-2.5 text-center text-xs text-muted-foreground">
         Demo · <span className="font-mono">admin@clearway.app</span> / <span className="font-mono">ChangeMe123!</span>
-      </div>
+      </div> */}
     </AuthLayout>
   );
 }
