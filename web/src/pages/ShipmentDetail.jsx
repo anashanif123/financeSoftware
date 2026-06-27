@@ -1,10 +1,16 @@
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Receipt } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, FileText, Receipt, Save, FolderKanban } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/Table';
-import { useItem } from '@/hooks/useApi';
+import { Button } from '@/components/ui/Button';
+import { Input, Label } from '@/components/ui/Input';
+import { useItem, useList } from '@/hooks/useApi';
+import { http } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 
 function Field({ label, value, mono }) {
@@ -13,6 +19,108 @@ function Field({ label, value, mono }) {
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className={`mt-1 text-sm text-foreground ${mono ? 'font-mono' : ''}`}>{value || '—'}</dd>
     </div>
+  );
+}
+
+// Operator step: assign the broker reference (ARS #), internal NFK ref, container
+// count, and WHICH projects this shipment serves (a container can carry several brands).
+function AssignCard({ shipment }) {
+  const qc = useQueryClient();
+  const { data: projectsData } = useList('projects', { limit: 200 });
+  const allProjects = projectsData?.data || [];
+
+  const [arsNumber, setArsNumber] = useState(shipment.arsNumber || '');
+  const [nfkRef, setNfkRef] = useState(shipment.nfkRef || '');
+  const [containerCount, setContainerCount] = useState(
+    shipment.containerCount != null ? String(Number(shipment.containerCount)) : '',
+  );
+  const [projectIds, setProjectIds] = useState((shipment.projects || []).map((p) => p.id));
+  const [saving, setSaving] = useState(false);
+
+  const toggleProject = (id) =>
+    setProjectIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await http.patch(`/shipments/${shipment.id}`, {
+        arsNumber: arsNumber || null,
+        nfkRef: nfkRef || null,
+        containerCount: containerCount === '' ? undefined : Number(containerCount),
+        projectIds,
+      });
+      await qc.invalidateQueries({ queryKey: ['shipments'] });
+      toast.success('Shipment updated');
+    } catch {
+      toast.error('Update failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FolderKanban className="h-4 w-4 text-muted-foreground" /> Assign details
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label>ARS #</Label>
+            <Input value={arsNumber} onChange={(e) => setArsNumber(e.target.value)} placeholder="e.g. Ars-060-26" />
+          </div>
+          <div>
+            <Label>NFK Ref</Label>
+            <Input value={nfkRef} onChange={(e) => setNfkRef(e.target.value)} placeholder="e.g. 281/24-25" />
+          </div>
+          <div>
+            <Label>Containers</Label>
+            <Input
+              type="number"
+              step="0.5"
+              value={containerCount}
+              onChange={(e) => setContainerCount(e.target.value)}
+              placeholder="e.g. 0.5, 1, 5"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label>Projects (this shipment serves)</Label>
+          {allProjects.length ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {allProjects.map((p) => {
+                const checked = projectIds.includes(p.id);
+                return (
+                  <label
+                    key={p.id}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                      checked ? 'border-primary/50 bg-primary/5' : 'border-input hover:border-primary/30'
+                    }`}
+                  >
+                    <input type="checkbox" checked={checked} onChange={() => toggleProject(p.id)} className="accent-primary" />
+                    <span className="truncate">{p.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No projects yet. Create projects first, then assign them here.
+            </p>
+          )}
+          <p className="mt-1.5 text-xs text-muted-foreground">{projectIds.length} selected</p>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={save} loading={saving}>
+            <Save className="h-4 w-4" /> Save
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -56,6 +164,8 @@ export function ShipmentDetail() {
           </dl>
         </CardContent>
       </Card>
+
+      <AssignCard shipment={s} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
