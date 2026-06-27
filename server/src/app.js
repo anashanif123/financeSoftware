@@ -16,9 +16,14 @@ export function createApp() {
 
   // Security + parsing
   app.use(helmet());
+  // Allowed browser origins. Normalise away trailing slashes so a value like
+  // "https://app.vercel.app/" still matches the browser's slash-less Origin.
+  const allowedOrigins = env.CORS_ORIGIN.split(',')
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
   app.use(
     cors({
-      origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+      origin: allowedOrigins,
       credentials: true,
     }),
   );
