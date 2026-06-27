@@ -1,16 +1,69 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Mail, CheckCircle2, Link2, Building2 } from 'lucide-react';
+import { Mail, CheckCircle2, Link2, Building2, KeyRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Input, Label } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { http, apiError } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '@/store/auth';
+
+// Change the logged-in user's password (e.g. replace the seeded default before handoff).
+function SecurityCard() {
+  const [currentPassword, setCurrent] = useState('');
+  const [newPassword, setNew] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (newPassword.length < 8) return toast.error('New password must be at least 8 characters');
+    if (newPassword !== confirm) return toast.error('Passwords do not match');
+    setSaving(true);
+    try {
+      await http.post('/auth/change-password', { currentPassword, newPassword });
+      toast.success('Password changed');
+      setCurrent('');
+      setNew('');
+      setConfirm('');
+    } catch (err) {
+      toast.error(apiError(err, 'Could not change password'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-muted-foreground" /> Security</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label>Current password</Label>
+            <Input type="password" value={currentPassword} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
+          </div>
+          <div>
+            <Label>New password</Label>
+            <Input type="password" value={newPassword} onChange={(e) => setNew(e.target.value)} autoComplete="new-password" />
+          </div>
+          <div>
+            <Label>Confirm new</Label>
+            <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={submit} loading={saving} disabled={!currentPassword || !newPassword}>Change password</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function Settings() {
   const { user } = useAuth();
@@ -112,6 +165,8 @@ export function Settings() {
           <CardDescription>These values are set via environment variables and printed on invoices. Edit them in the API <span className="font-mono text-xs">.env</span> or the settings store.</CardDescription>
         </CardContent>
       </Card>
+
+      <SecurityCard />
     </div>
   );
 }
