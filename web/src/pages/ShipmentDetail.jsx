@@ -43,7 +43,7 @@ export function ShipmentDetail() {
             <Field label="Container" value={s.containerNumber} mono />
             <Field label="B/L #" value={s.blNumber} mono />
             <Field label="Customer" value={s.customer?.name} />
-            <Field label="Project" value={s.project?.name} />
+            <Field label="Projects" value={s.projects?.map((p) => p.name).join(', ') || '—'} />
             <Field label="Vessel" value={s.vessel} />
             <Field label="Voyage" value={s.voyage} />
             <Field label="Origin" value={s.originPort} />

@@ -35,7 +35,8 @@ const baseSchema = z.object({
   sailDate: z.coerce.date().optional().nullable(),
   arrivalDate: z.coerce.date().optional().nullable(),
   entryDate: z.coerce.date().optional().nullable(),
-  projectId: z.string().optional().nullable(),
+  // A shipment can serve many projects — operator assigns them by id.
+  projectIds: z.array(z.string()).optional(),
   customerId: z.string().optional().nullable(),
 });
 
@@ -45,7 +46,7 @@ router.get(
     const { search, status, projectId, customerId } = req.query;
     const where = {
       ...(status ? { status } : {}),
-      ...(projectId ? { projectId } : {}),
+      ...(projectId ? { projects: { some: { id: projectId } } } : {}),
       ...(customerId ? { customerId } : {}),
       ...(search
         ? {
@@ -66,7 +67,7 @@ router.get(
       skip: meta.skip,
       take: meta.limit,
       include: {
-        project: { select: { id: true, name: true } },
+        projects: { select: { id: true, name: true } },
         customer: { select: { id: true, name: true } },
         _count: { select: { documents: true, invoices: true } },
       },
@@ -81,7 +82,7 @@ router.get(
     const shipment = await prisma.shipment.findUnique({
       where: { id: req.params.id },
       include: {
-        project: true,
+        projects: { select: { id: true, name: true, code: true } },
         customer: true,
         documents: { orderBy: { createdAt: 'desc' } },
         invoices: { orderBy: { createdAt: 'desc' } },
@@ -99,7 +100,14 @@ router.post(
   writeAccess,
   validate({ body: baseSchema }),
   asyncHandler(async (req, res) => {
-    const shipment = await prisma.shipment.create({ data: req.body });
+    const { projectIds, ...data } = req.body;
+    const shipment = await prisma.shipment.create({
+      data: {
+        ...data,
+        ...(projectIds?.length ? { projects: { connect: projectIds.map((id) => ({ id })) } } : {}),
+      },
+      include: { projects: { select: { id: true, name: true } } },
+    });
     await logActivity({
       type: 'SHIPMENT_CREATED',
       description: `Shipment ${shipment.shipmentNumber || shipment.arsNumber || shipment.id} created`,
@@ -116,10 +124,42 @@ router.patch(
   writeAccess,
   validate({ body: baseSchema }),
   asyncHandler(async (req, res) => {
-    const shipment = await prisma.shipment.update({ where: { id: req.params.id }, data: req.body });
+    const { projectIds, ...data } = req.body;
+    const shipment = await prisma.shipment.update({
+      where: { id: req.params.id },
+      data: {
+        ...data,
+        // `set` replaces the whole project list when projectIds is provided.
+        ...(projectIds ? { projects: { set: projectIds.map((id) => ({ id })) } } : {}),
+      },
+      include: { projects: { select: { id: true, name: true } } },
+    });
     await logActivity({
       type: 'SHIPMENT_UPDATED',
       description: `Shipment ${shipment.shipmentNumber || shipment.id} updated`,
+      entityType: 'Shipment',
+      entityId: shipment.id,
+      actorId: req.user.id,
+    });
+    ok(res, shipment);
+  }),
+);
+
+// Assign (replace) the set of projects this shipment serves — the operator's
+// "is shipment ke ye projects hain" step.
+router.post(
+  '/:id/projects',
+  writeAccess,
+  validate({ body: z.object({ projectIds: z.array(z.string()) }) }),
+  asyncHandler(async (req, res) => {
+    const shipment = await prisma.shipment.update({
+      where: { id: req.params.id },
+      data: { projects: { set: req.body.projectIds.map((id) => ({ id })) } },
+      include: { projects: { select: { id: true, name: true } } },
+    });
+    await logActivity({
+      type: 'SHIPMENT_UPDATED',
+      description: `Projects assigned to shipment ${shipment.shipmentNumber || shipment.id} (${shipment.projects.length})`,
       entityType: 'Shipment',
       entityId: shipment.id,
       actorId: req.user.id,

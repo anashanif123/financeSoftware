@@ -60,7 +60,7 @@ async function main() {
       cartonCount: 1029,
       countryOfOrigin: 'PK',
       customerId: byCode.DEIRA.id,
-      projectId: projects[2].id,
+      projects: { connect: { id: projects[2].id } },
     },
   });
   console.log('✓ Sample shipment (Ars-060-26)');

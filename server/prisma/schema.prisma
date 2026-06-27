@@ -187,7 +187,9 @@ model Project {
   updatedAt   DateTime      @updatedAt
   archivedAt  DateTime?
 
-  shipments Shipment[]
+  // One project can span many shipments, and one shipment can serve many
+  // projects (a single container/entry often carries goods for several brands).
+  shipments Shipment[] @relation("ProjectShipments")
   invoices  Invoice[]
   documents Document[]
   emails    Email[]
@@ -227,8 +229,8 @@ model Shipment {
   arrivalDate     DateTime?
   entryDate       DateTime?
 
-  projectId  String?
-  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  // A shipment can belong to multiple projects (operator assigns them manually).
+  projects   Project[] @relation("ProjectShipments")
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
@@ -244,7 +246,6 @@ model Shipment {
   @@index([entryNumber])
   @@index([arsNumber])
   @@index([status])
-  @@index([projectId])
 }
 
 // ─────────────────────────── Documents & email ───────────────────────────
