@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Mail, CheckCircle2, Link2, Building2, KeyRound } from 'lucide-react';
+import { Mail, CheckCircle2, Link2, Building2, KeyRound, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Label } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { http, apiError } from '@/lib/api';
+import { http, api, apiError } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '@/store/auth';
 
@@ -69,7 +69,6 @@ export function Settings() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
 
-  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => http.get('/settings') });
   const { data: gmail, refetch, isLoading } = useQuery({ queryKey: ['gmail-status'], queryFn: () => http.get('/gmail/status') });
   const status = gmail?.data;
 
@@ -106,8 +105,6 @@ export function Settings() {
       toast.error(apiError(err));
     }
   };
-
-  const company = settings?.data?.company;
 
   return (
     <div className="animate-fade-in max-w-3xl space-y-6">
@@ -150,32 +147,96 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      {/* Company identity */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" /> Company identity</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Detail label="Company name" value={company?.name} />
-          <Detail label="Billing email" value={company?.email} />
-          <Detail label="Address" value={company?.address} className="sm:col-span-2" />
-          <Detail label="Default commission" value={`${settings?.data?.commission?.defaultType} · ${settings?.data?.commission?.defaultRate}`} />
-        </CardContent>
-        <CardContent className="border-t border-border pt-4">
-          <CardDescription>These values are set via environment variables and printed on invoices. Edit them in the API <span className="font-mono text-xs">.env</span> or the settings store.</CardDescription>
-        </CardContent>
-      </Card>
+      <CompanyCard />
 
       <SecurityCard />
     </div>
   );
 }
 
-function Detail({ label, value, className }) {
+// Editable company identity (printed on invoice PDFs) + logo upload.
+function CompanyCard() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['settings'], queryFn: () => http.get('/settings') });
+  const company = data?.data?.company;
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (company && !form) setForm({ name: company.name || '', email: company.email || '', address: company.address || '' });
+  }, [company, form]);
+
+  const f = form || { name: '', email: '', address: '' };
+  const set = (k) => (e) => setForm({ ...f, [k]: e.target.value });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await Promise.all([
+        api.put('/settings/companyName', { value: f.name }),
+        api.put('/settings/companyEmail', { value: f.email }),
+        api.put('/settings/companyAddress', { value: f.address }),
+      ]);
+      toast.success('Company info saved');
+      qc.invalidateQueries({ queryKey: ['settings'] });
+    } catch (err) {
+      toast.error(apiError(err, 'Save failed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.post('/settings/logo', fd);
+      toast.success('Logo updated');
+      qc.invalidateQueries({ queryKey: ['settings'] });
+    } catch (err) {
+      toast.error(apiError(err, 'Logo upload failed'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
-    <div className={className}>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm text-foreground">{value || '—'}</p>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" /> Company identity</CardTitle>
+        <CardDescription>Printed on the invoices your customers receive.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-muted">
+            {company?.logoUrl ? (
+              <img src={company.logoUrl} alt="logo" className="h-full w-full object-contain" />
+            ) : (
+              <Building2 className="h-6 w-6 text-muted-foreground" />
+            )}
+          </div>
+          <div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadLogo} />
+            <Button variant="secondary" size="sm" loading={uploading} onClick={() => fileRef.current?.click()}>
+              <Upload className="h-4 w-4" /> Upload logo
+            </Button>
+            <p className="mt-1 text-xs text-muted-foreground">PNG/JPG — shown on invoice PDFs.</p>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div><Label>Company name</Label><Input value={f.name} onChange={set('name')} /></div>
+          <div><Label>Billing email</Label><Input value={f.email} onChange={set('email')} /></div>
+          <div className="sm:col-span-2"><Label>Address</Label><Input value={f.address} onChange={set('address')} /></div>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={save} loading={saving}>Save company info</Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

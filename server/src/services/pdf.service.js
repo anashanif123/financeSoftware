@@ -1,7 +1,31 @@
 import PDFDocument from 'pdfkit';
 import { env } from '../config/env.js';
+import { prisma } from '../config/db.js';
 import { toNumber, formatCurrency } from '../utils/money.js';
 import { uploadBuffer } from './cloudinary.service.js';
+
+// Resolve the biller's identity: UI-saved settings override .env. Also fetch the
+// logo image bytes (pdfkit needs a buffer, not a URL); never fail the PDF over it.
+async function resolveCompany() {
+  const rows = await prisma.setting.findMany().catch(() => []);
+  const o = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const company = {
+    name: o.companyName ?? env.COMPANY_NAME,
+    email: o.companyEmail ?? env.COMPANY_EMAIL,
+    address: o.companyAddress ?? env.COMPANY_ADDRESS,
+    logoUrl: o.companyLogoUrl ?? env.COMPANY_LOGO_URL ?? null,
+  };
+  let logo = null;
+  if (company.logoUrl) {
+    try {
+      const res = await fetch(company.logoUrl);
+      if (res.ok) logo = Buffer.from(await res.arrayBuffer());
+    } catch {
+      logo = null;
+    }
+  }
+  return { company, logo };
+}
 
 // Palette
 const INK = '#111827';
@@ -15,7 +39,7 @@ const fmtDate = (d) =>
 
 // Professional shipping invoice (Module 11) — mirrors a broker invoice layout:
 // company header, bill-to, amount due, shipment details, containers, charges, totals.
-function renderToBuffer(invoice) {
+function renderToBuffer(invoice, company, logo) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
     const chunks = [];
@@ -32,14 +56,23 @@ function renderToBuffer(invoice) {
     const amountDue = toNumber(invoice.totalAmount) - toNumber(invoice.amountPaid);
 
     // ── Header: company (biller) left, INVOICE meta right ──
-    doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(20).text(env.COMPANY_NAME, L, 42);
+    let nameY = 42;
+    if (logo) {
+      try {
+        doc.image(logo, L, 40, { fit: [150, 38] });
+        nameY = 84;
+      } catch {
+        nameY = 42;
+      }
+    }
+    doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(logo ? 13 : 20).text(company.name, L, nameY, { width: 270 });
     doc.fillColor(MUTED).font('Helvetica').fontSize(8.5);
-    let cy = 68;
-    if (env.COMPANY_ADDRESS) {
-      doc.text(env.COMPANY_ADDRESS, L, cy, { width: 250 });
+    let cy = doc.y + 2;
+    if (company.address) {
+      doc.text(company.address, L, cy, { width: 260 });
       cy = doc.y + 1;
     }
-    if (env.COMPANY_EMAIL) doc.text(env.COMPANY_EMAIL, L, cy);
+    if (company.email) doc.text(company.email, L, cy);
 
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(28).text('INVOICE', R - 220, 40, { width: 220, align: 'right' });
     let hy = 76;
@@ -179,13 +212,13 @@ function renderToBuffer(invoice) {
 
     // ── Footer ──
     doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(
-      invoice.notes || `Please reference invoice ${invoice.invoiceNumber} when remitting payment to ${env.COMPANY_NAME}.`,
+      invoice.notes || `Please reference invoice ${invoice.invoiceNumber} when remitting payment to ${company.name}.`,
       L,
       788,
       { width: W, align: 'center' },
     );
     doc.fontSize(8).fillColor('#9ca3af').text(
-      [env.COMPANY_NAME, env.COMPANY_EMAIL, env.COMPANY_ADDRESS].filter(Boolean).join('  ·  '),
+      [company.name, company.email, company.address].filter(Boolean).join('  ·  '),
       L,
       804,
       { width: W, align: 'center' },
@@ -196,7 +229,8 @@ function renderToBuffer(invoice) {
 }
 
 export async function generateInvoicePdf(invoice) {
-  const buffer = await renderToBuffer(invoice);
+  const { company, logo } = await resolveCompany();
+  const buffer = await renderToBuffer(invoice, company, logo);
   const { url, publicId } = await uploadBuffer(buffer, {
     folder: 'invoices',
     filename: `${invoice.invoiceNumber}.pdf`,
