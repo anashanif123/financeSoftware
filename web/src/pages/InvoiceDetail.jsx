@@ -47,6 +47,19 @@ export function InvoiceDetail() {
 
   const c = commission ?? { commissionType: inv.commissionType, commissionRate: Number(inv.commissionRate) };
 
+  // Live preview of what the commission will be, so the operator SEES it before saving.
+  const containers = Number(inv.shipment?.containerCount || 1);
+  const baseCost = Number(inv.baseCost) || 0;
+  const rate = Number(c.commissionRate) || 0;
+  const previewCommission =
+    c.commissionType === 'FLAT'
+      ? rate
+      : c.commissionType === 'PER_CONTAINER'
+        ? rate * containers
+        : c.commissionType === 'PERCENTAGE'
+          ? (baseCost * rate) / 100
+          : 0;
+
   return (
     <div className="animate-fade-in space-y-6">
       <Link to="/invoices" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
@@ -110,11 +123,12 @@ export function InvoiceDetail() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Commission</CardTitle>
+              <CardTitle>Your commission</CardTitle>
               <button
                 onClick={() => run('toggle', () => http.post(`/invoices/${id}/commission/toggle`), 'Commission toggled')}
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-primary"
                 disabled={busy === 'toggle'}
+                title="Quickly turn commission on/off"
               >
                 {inv.commissionType === 'NONE' ? <ToggleLeft className="h-5 w-5" /> : <ToggleRight className="h-5 w-5" />}
                 {inv.commissionType === 'NONE' ? 'Off' : 'On'}
@@ -122,28 +136,50 @@ export function InvoiceDetail() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label>Type</Label>
+                <Label>How is it charged?</Label>
                 <Select value={c.commissionType} onChange={(e) => setCommission({ ...c, commissionType: e.target.value })}>
-                  <option value="PER_CONTAINER">Per container</option>
-                  <option value="FLAT">Flat amount</option>
-                  <option value="PERCENTAGE">Percentage</option>
-                  <option value="NONE">None</option>
+                  <option value="PER_CONTAINER">Per container (× containers)</option>
+                  <option value="FLAT">Flat amount (exact $)</option>
+                  <option value="PERCENTAGE">Percentage of base</option>
+                  <option value="NONE">No commission</option>
                 </Select>
               </div>
-              <div>
-                <Label>Rate {c.commissionType === 'PERCENTAGE' ? '(%)' : c.commissionType === 'PER_CONTAINER' ? '(per container)' : '(amount)'}</Label>
-                <Input type="number" step="0.01" value={c.commissionRate} onChange={(e) => setCommission({ ...c, commissionRate: Number(e.target.value) })} />
+              {c.commissionType !== 'NONE' && (
+                <div>
+                  <Label>
+                    {c.commissionType === 'PERCENTAGE'
+                      ? 'Percentage (%)'
+                      : c.commissionType === 'PER_CONTAINER'
+                        ? `Amount per container (× ${containers})`
+                        : 'Exact amount ($)'}
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={c.commissionRate}
+                    onChange={(e) => setCommission({ ...c, commissionRate: Number(e.target.value) })}
+                    placeholder="e.g. 1400"
+                  />
+                </div>
+              )}
+
+              {/* Live preview before saving */}
+              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-muted px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground">Commission will be</span>
+                <span className="font-display text-base font-semibold text-primary tabular-nums">
+                  {formatCurrency(previewCommission, inv.currency)}
+                </span>
               </div>
+
               <Button
-                size="sm"
                 className="w-full"
                 loading={busy === 'commission'}
-                onClick={() => run('commission', () => http.patch(`/invoices/${id}/commission`, c), 'Commission updated')}
+                onClick={() => run('commission', () => http.patch(`/invoices/${id}/commission`, c), 'Commission saved')}
               >
-                Recalculate total
+                Save commission
               </Button>
               <p className="text-xs text-muted-foreground">
-                Per-container mirrors the NFK ledger (≈ $1,400 × containers). Changing the rate recalculates the invoice total instantly.
+                Pick <span className="font-medium">Flat amount</span> to type an exact figure, or <span className="font-medium">Per container</span> for the NFK ledger style (e.g. 1400 × containers). The toggle (top-right) just turns it on/off.
               </p>
             </CardContent>
           </Card>

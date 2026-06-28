@@ -26,6 +26,7 @@ const GROUPS = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/ledger', label: 'Ledger', icon: BookOpen },
+      { to: '/customers', label: 'Customers', icon: Users },
     ],
   },
   {
@@ -48,10 +49,7 @@ const GROUPS = [
   },
   {
     label: 'Setup',
-    items: [
-      { to: '/projects', label: 'Projects', icon: FolderKanban },
-      { to: '/customers', label: 'Customers', icon: Users },
-    ],
+    items: [{ to: '/projects', label: 'Projects', icon: FolderKanban }],
   },
 ];
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -15,6 +16,7 @@ import { apiError } from '@/lib/api';
 export function Customers() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useList('customers', { search });
   const create = useCreate('customers');
   const [form, setForm] = useState({ name: '', email: '', country: '' });
@@ -50,7 +52,7 @@ export function Customers() {
             <THead><tr><TH>Name</TH><TH>Email</TH><TH>Country</TH><TH className="text-right">Projects</TH><TH className="text-right">Invoices</TH></tr></THead>
             <TBody>
               {rows.map((c) => (
-                <TR key={c.id}>
+                <TR key={c.id} clickable onClick={() => navigate(`/customers/${c.id}`)}>
                   <TD className="font-medium">{c.name}</TD>
                   <TD className="text-muted-foreground">{c.email || '—'}</TD>
                   <TD className="text-muted-foreground">{c.country || '—'}</TD>

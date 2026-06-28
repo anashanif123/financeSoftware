@@ -19,6 +19,7 @@ import { Customers } from '@/pages/Customers';
 import { Review } from '@/pages/Review';
 import { Reports } from '@/pages/Reports';
 import { Ledger } from '@/pages/Ledger';
+import { CustomerDetail } from '@/pages/CustomerDetail';
 import { Settings } from '@/pages/Settings';
 import { NotFound } from '@/pages/NotFound';
 
@@ -58,6 +59,7 @@ export function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="ledger" element={<Ledger />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="settings" element={<Settings />} />
         <Route path="settings/gmail" element={<Settings />} />
       </Route>
