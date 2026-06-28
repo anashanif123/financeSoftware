@@ -10,13 +10,16 @@ import {
   CreditCard,
   Activity as ActivityIcon,
   ArrowUpRight,
+  ClipboardCheck,
+  AlertTriangle,
+  CalendarClock,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { CardSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
 import { TrendChart } from '@/components/charts/TrendChart';
-import { useStats, useCharts, useRecent } from '@/hooks/useApi';
+import { useStats, useCharts, useRecent, useList } from '@/hooks/useApi';
 import { useAuth } from '@/store/auth';
 import { formatCompactCurrency, formatCurrency, formatNumber, timeAgo } from '@/lib/format';
 
@@ -57,6 +60,9 @@ export function Dashboard() {
           View reports <ArrowUpRight className="h-4 w-4" />
         </Link>
       </div>
+
+      {/* Needs attention — what the operator must act on right now */}
+      <NeedsAttention />
 
       {/* Primary KPIs */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -155,6 +161,39 @@ export function Dashboard() {
           )}
         </FeedCard>
       </div>
+    </div>
+  );
+}
+
+// Surfaces only the things that need the operator's action. Hidden when all clear.
+function NeedsAttention() {
+  const review = useList('documents', { reviewStatus: 'PENDING', limit: 1 });
+  const overdue = useList('invoices', { status: 'OVERDUE', limit: 1 });
+  const disputes = useList('disputes', { status: 'OPEN', limit: 1 });
+
+  const items = [
+    { count: review.data?.meta?.total || 0, label: 'to review', to: '/review', icon: ClipboardCheck },
+    { count: overdue.data?.meta?.total || 0, label: 'overdue invoices', to: '/invoices', icon: CalendarClock },
+    { count: disputes.data?.meta?.total || 0, label: 'open disputes', to: '/disputes', icon: AlertTriangle },
+  ].filter((i) => i.count > 0);
+
+  if (!items.length) return null;
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {items.map((i) => (
+        <Link key={i.label} to={i.to}>
+          <Card hover className="flex items-center gap-3 border-warning/40 bg-warning/[0.04] p-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
+              <i.icon className="h-[18px] w-[18px]" />
+            </span>
+            <div>
+              <p className="font-display text-lg font-semibold leading-tight">{i.count}</p>
+              <p className="text-xs text-muted-foreground">{i.label}</p>
+            </div>
+          </Card>
+        </Link>
+      ))}
     </div>
   );
 }

@@ -14,23 +14,27 @@ import {
   ClipboardCheck,
   Scale,
   Anchor,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-// Grouped navigation reads like a real operations console, not a flat list.
+// Navigation follows the real workflow: see the numbers → process incoming work →
+// bill & collect → setup. Reads like the job, not a list of database tables.
 const GROUPS = [
   {
     label: 'Overview',
-    items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true }],
+    items: [
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/ledger', label: 'Ledger', icon: BookOpen },
+    ],
   },
   {
-    label: 'Operations',
+    label: 'Workflow',
     items: [
-      { to: '/projects', label: 'Projects', icon: FolderKanban },
+      { to: '/emails', label: 'Inbox', icon: Mail },
+      { to: '/review', label: 'Review', icon: ClipboardCheck },
       { to: '/shipments', label: 'Shipments', icon: Ship },
       { to: '/documents', label: 'Documents', icon: FileText },
-      { to: '/review', label: 'Review', icon: ClipboardCheck },
-      { to: '/emails', label: 'Inbox', icon: Mail },
     ],
   },
   {
@@ -43,8 +47,11 @@ const GROUPS = [
     ],
   },
   {
-    label: 'Directory',
-    items: [{ to: '/customers', label: 'Customers', icon: Users }],
+    label: 'Setup',
+    items: [
+      { to: '/projects', label: 'Projects', icon: FolderKanban },
+      { to: '/customers', label: 'Customers', icon: Users },
+    ],
   },
 ];
 

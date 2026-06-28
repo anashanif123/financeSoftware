@@ -22,6 +22,15 @@ function Field({ label, value, mono }) {
   );
 }
 
+function Stat({ label, value, accent }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-lg font-semibold tabular-nums ${accent ? 'text-primary' : 'text-foreground'}`}>{value}</p>
+    </div>
+  );
+}
+
 // Operator step: assign the broker reference (ARS #), internal NFK ref, container
 // count, and WHICH projects this shipment serves (a container can carry several brands).
 function AssignCard({ shipment }) {
@@ -124,22 +133,77 @@ function AssignCard({ shipment }) {
   );
 }
 
+// Sum the broker/customs charges the AI extracted from this shipment's documents
+// (duties from the 7501 + service charges from the broker invoice) = our base cost.
+function brokerCostFromDocs(documents = []) {
+  return documents.reduce((sum, d) => {
+    const ex = d.extractedData;
+    if (!ex) return sum;
+    if (Array.isArray(ex.charges) && ex.charges.length) {
+      return sum + ex.charges.reduce((a, c) => a + (Number(c.amount) || 0), 0);
+    }
+    return sum + (Number(ex.totalAmount) || 0);
+  }, 0);
+}
+
 export function ShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [creating, setCreating] = useState(false);
   const { data, isLoading } = useItem('shipments', id);
   const s = data?.data;
   if (isLoading || !s) return <Skeleton className="h-64 w-full" />;
+
+  const brokerCost = Math.round(brokerCostFromDocs(s.documents) * 100) / 100;
+  const hasInvoice = (s.invoices || []).length > 0;
+
+  const createInvoice = async () => {
+    setCreating(true);
+    try {
+      const res = await http.post('/invoices', {
+        shipmentId: s.id,
+        customerId: s.customer?.id || null,
+        projectId: s.projects?.[0]?.id || null,
+        baseCost: brokerCost,
+        commissionType: 'PER_CONTAINER',
+        commissionRate: 1400,
+      });
+      toast.success('Invoice created with your commission');
+      qc.invalidateQueries({ queryKey: ['shipments'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      navigate(`/invoices/${res.data.id}`);
+    } catch {
+      toast.error('Could not create invoice');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
       <Link to="/shipments" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Shipments
       </Link>
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-semibold">{s.shipmentNumber || s.arsNumber || 'Shipment'}</h1>
-        <Badge status={s.status} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold">{s.shipmentNumber || s.arsNumber || 'Shipment'}</h1>
+          <Badge status={s.status} />
+        </div>
+        <Button onClick={createInvoice} loading={creating}>
+          <Receipt className="h-4 w-4" /> {hasInvoice ? 'Create another invoice' : 'Create invoice'}
+        </Button>
       </div>
+
+      {/* AI cost summary — makes the document→invoice automation visible at a glance. */}
+      <Card>
+        <CardContent className="grid grid-cols-2 gap-4 py-4 sm:grid-cols-4">
+          <Stat label="Documents" value={s.documents?.length || 0} />
+          <Stat label="AI base cost" value={formatCurrency(brokerCost)} accent />
+          <Stat label="Containers" value={s.containerCount ? Number(s.containerCount) : '—'} />
+          <Stat label="Commission @1400/ctr" value={formatCurrency((Number(s.containerCount) || 0) * 1400)} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Details</CardTitle></CardHeader>
