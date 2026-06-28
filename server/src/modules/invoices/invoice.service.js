@@ -9,7 +9,7 @@ import { logActivity } from '../../services/activity.service.js';
 const FULL_INCLUDE = {
   customer: true,
   project: { select: { id: true, name: true } },
-  shipment: { select: { id: true, shipmentNumber: true, containerNumber: true, containerCount: true } },
+  shipment: true,
   items: { orderBy: { createdAt: 'asc' } },
   payments: { orderBy: { paidAt: 'desc' } },
 };
