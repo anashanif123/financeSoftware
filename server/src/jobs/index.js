@@ -6,13 +6,13 @@ import { prisma } from '../config/db.js';
 
 const tasks = [];
 
-// Module 3/4/13: poll Gmail and process new mail every 5 minutes.
+// Module 3/4/13: poll Gmail and process new mail every 2 minutes.
 function scheduleGmailSync() {
   if (!features.gmail) {
     logger.warn('Gmail not configured — inbox sync job disabled');
     return;
   }
-  const task = cron.schedule('*/5 * * * *', async () => {
+  const task = cron.schedule('*/2 * * * *', async () => {
     try {
       const result = await syncInbox({ query: 'newer_than:1d', max: 25 });
       if (result.processed) logger.info({ result }, 'Gmail sync processed new emails');

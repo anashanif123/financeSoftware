@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Plus } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Input, Select, Label, Textarea } from '@/components/ui/Input';
+import { Select, Label, Textarea } from '@/components/ui/Input';
 import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/Table';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/EmptyState';
@@ -15,74 +15,10 @@ import { useList } from '@/hooks/useApi';
 import { http, apiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 
-const TYPES = ['WRONG_AMOUNT', 'MISSING_CHARGE', 'INVOICE_ISSUE', 'PAYMENT_ISSUE', 'OTHER'];
 const STATUSES = ['OPEN', 'REVIEW', 'RESOLVED', 'CLOSED'];
 
-function NewDisputeModal({ open, onClose }) {
-  const qc = useQueryClient();
-  const { data: invoices } = useList('invoices', { limit: 200 });
-  const [form, setForm] = useState({ title: '', type: 'WRONG_AMOUNT', invoiceId: '', description: '' });
-  const [saving, setSaving] = useState(false);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const submit = async () => {
-    if (!form.title.trim()) return toast.error('Enter a title');
-    setSaving(true);
-    try {
-      await http.post('/disputes', {
-        title: form.title,
-        type: form.type,
-        invoiceId: form.invoiceId || null,
-        description: form.description || null,
-      });
-      toast.success('Dispute opened');
-      qc.invalidateQueries({ queryKey: ['disputes'] });
-      onClose();
-      setForm({ title: '', type: 'WRONG_AMOUNT', invoiceId: '', description: '' });
-    } catch (err) {
-      toast.error(apiError(err, 'Could not open dispute'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="New dispute" description="Log a billing or payment issue raised by a customer.">
-      <div className="space-y-4">
-        <div>
-          <Label>Title</Label>
-          <Input value={form.title} onChange={set('title')} placeholder="e.g. Wrong amount on INV-2026-0003" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label>Type</Label>
-            <Select value={form.type} onChange={set('type')}>
-              {TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-            </Select>
-          </div>
-          <div>
-            <Label>Invoice (optional)</Label>
-            <Select value={form.invoiceId} onChange={set('invoiceId')}>
-              <option value="">— none —</option>
-              {(invoices?.data || []).map((i) => (
-                <option key={i.id} value={i.id}>{i.invoiceNumber} · {i.customer?.name || '—'}</option>
-              ))}
-            </Select>
-          </div>
-        </div>
-        <div>
-          <Label>Description</Label>
-          <Textarea value={form.description} onChange={set('description')} placeholder="What is the issue?" />
-        </div>
-        <div className="flex justify-end gap-2 pt-1">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} loading={saving}>Open dispute</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
+// Disputes are raised by the CUSTOMER (auto-opened from their email). The agent
+// only works/resolves them here — so there is no manual "create dispute".
 function ResolveModal({ dispute, onClose }) {
   const qc = useQueryClient();
   const [status, setStatus] = useState(dispute?.status || 'OPEN');
@@ -104,8 +40,13 @@ function ResolveModal({ dispute, onClose }) {
   };
 
   return (
-    <Modal open={Boolean(dispute)} onClose={onClose} title={dispute?.title} description="Update status and record how it was resolved.">
+    <Modal open={Boolean(dispute)} onClose={onClose} title={dispute?.title} description="Raised by the customer. Update status and record how you resolved it.">
       <div className="space-y-4">
+        {dispute?.description && (
+          <div className="rounded-xl border border-border bg-surface-muted p-3 text-sm text-muted-foreground">
+            {dispute.description}
+          </div>
+        )}
         <div>
           <Label>Status</Label>
           <Select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -126,7 +67,6 @@ function ResolveModal({ dispute, onClose }) {
 }
 
 export function Disputes() {
-  const [creating, setCreating] = useState(false);
   const [active, setActive] = useState(null);
   const { data, isLoading, isError, refetch } = useList('disputes');
   const rows = data?.data || [];
@@ -135,8 +75,7 @@ export function Disputes() {
     <div className="animate-fade-in">
       <PageHeader
         title="Disputes"
-        description="Billing and payment issues — opened automatically from flagged emails, or manually."
-        actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New dispute</Button>}
+        description="Billing issues raised by customers — opened automatically from their emails. Click one to resolve it."
       />
       <Card>
         {isLoading ? (
@@ -144,7 +83,7 @@ export function Disputes() {
         ) : isError ? (
           <ErrorState onRetry={refetch} />
         ) : rows.length === 0 ? (
-          <EmptyState icon={AlertTriangle} title="No disputes" description="When a customer email mentions a wrong amount or billing issue, a dispute is opened here — or add one manually." />
+          <EmptyState icon={AlertTriangle} title="No disputes" description="When a customer email mentions a wrong amount or billing issue, a dispute opens here automatically." />
         ) : (
           <Table>
             <THead><tr><TH>Title</TH><TH>Type</TH><TH>Invoice</TH><TH>Status</TH><TH>Opened</TH></tr></THead>
@@ -163,7 +102,6 @@ export function Disputes() {
         )}
       </Card>
 
-      <NewDisputeModal open={creating} onClose={() => setCreating(false)} />
       <ResolveModal dispute={active} onClose={() => setActive(null)} />
     </div>
   );
