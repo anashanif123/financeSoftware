@@ -221,14 +221,26 @@ export function ShipmentDetail() {
   const createInvoice = async () => {
     setCreating(true);
     try {
-      const res = await http.post('/invoices', {
+      // Carry each extracted charge as a line item so the invoice PDF shows the
+      // full rates table (like the broker invoice), not one lump sum.
+      const items = [];
+      for (const d of s.documents || []) {
+        for (const c of d.extractedData?.charges || []) {
+          if (c?.description && Number(c?.amount)) {
+            items.push({ description: c.description, category: 'BROKER_FEE', quantity: 1, unitPrice: Number(c.amount), amount: Number(c.amount) });
+          }
+        }
+      }
+      const body = {
         shipmentId: s.id,
         customerId: s.customer?.id || null,
         projectId: s.projects?.[0]?.id || null,
-        baseCost: brokerCost,
         commissionType: 'PER_CONTAINER',
         commissionRate: 1400,
-      });
+      };
+      if (items.length) body.items = items;
+      else body.baseCost = brokerCost;
+      const res = await http.post('/invoices', body);
       toast.success('Invoice created with your commission');
       qc.invalidateQueries({ queryKey: ['shipments'] });
       qc.invalidateQueries({ queryKey: ['invoices'] });
