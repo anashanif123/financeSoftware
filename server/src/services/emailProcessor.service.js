@@ -95,14 +95,6 @@ async function matchOrCreateShipment(extracted) {
   return { shipment: created, isNew: true };
 }
 
-// Email categories that actually carry shipping documents worth OCR-ing.
-const DOC_CATEGORIES = new Set([
-  'SHIPMENT_DOCUMENT',
-  'CUSTOMS_DOCUMENT',
-  'BROKER_INVOICE',
-  'FREIGHT_INVOICE',
-]);
-
 // Doc types that must ALWAYS be human-reviewed (the operator assigns the ARS #,
 // links projects, and confirms the figures before they feed an invoice).
 const ALWAYS_REVIEW_TYPES = new Set([
@@ -159,13 +151,15 @@ export async function processEmail(connection, msg) {
 
   // 1) Process attachments → Cloudinary + AI extraction → Document + Shipment.
   for (const att of msg.attachments || []) {
-    // Speed: skip inline images (logos/signatures) on non-document emails — avoids
-    // wasting a vision-OCR call on every marketing logo. PDFs are always processed.
-    if (isImage(att.mimeType, att.filename) && !isPdf(att.mimeType, att.filename) && !DOC_CATEGORIES.has(email.category)) {
-      continue;
-    }
     try {
       const buffer = await downloadAttachment(connection, msg.gmailMessageId, att.attachmentId);
+
+      // Skip only true junk: tiny tracking pixels / inline icons (< 6 KB). Every real
+      // document — even a compressed WhatsApp photo — is comfortably larger.
+      if (isImage(att.mimeType, att.filename) && !isPdf(att.mimeType, att.filename) && buffer.length < 6_000) {
+        continue;
+      }
+
       const uploaded = await uploadBuffer(buffer, { folder: 'documents', filename: att.filename, mimeType: att.mimeType });
 
       // ── OCR pipeline ── read the ACTUAL document, not just the email body:

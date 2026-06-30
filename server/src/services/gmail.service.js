@@ -99,6 +99,17 @@ function headerValue(headers = [], name) {
   return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value || '';
 }
 
+// Walk the full MIME tree — attachments can be nested several levels deep
+// (multipart/mixed → multipart/related → …), not just at the top level.
+function collectAttachments(part, out = []) {
+  if (!part) return out;
+  if (part.filename && part.body?.attachmentId) {
+    out.push({ filename: part.filename, mimeType: part.mimeType, attachmentId: part.body.attachmentId });
+  }
+  for (const child of part.parts || []) collectAttachments(child, out);
+  return out;
+}
+
 // Fetch recent messages (default: last 7 days). Returns normalised records.
 export async function fetchMessages(connection, { query = 'newer_than:7d', max = 25 } = {}) {
   const gmail = await clientForConnection(connection);
@@ -113,9 +124,7 @@ export async function fetchMessages(connection, { query = 'newer_than:7d', max =
     const fromRaw = headerValue(headers, 'From');
     const fromMatch = /<(.+?)>/.exec(fromRaw);
 
-    const attachments = (payload?.parts || [])
-      .filter((p) => p.filename && p.body?.attachmentId)
-      .map((p) => ({ filename: p.filename, mimeType: p.mimeType, attachmentId: p.body.attachmentId }));
+    const attachments = collectAttachments(payload);
 
     results.push({
       gmailMessageId: id,
