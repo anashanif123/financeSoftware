@@ -3,12 +3,12 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, FileText, Receipt, Save, FolderKanban } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Table, THead, TH, TBody, TR, TD } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
-import { Input, Label } from '@/components/ui/Input';
+import { Input, Label, Select } from '@/components/ui/Input';
 import { useItem, useList } from '@/hooks/useApi';
 import { http } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
@@ -35,33 +35,74 @@ function Stat({ label, value, accent }) {
 // count, and WHICH projects this shipment serves (a container can carry several brands).
 function AssignCard({ shipment }) {
   const qc = useQueryClient();
-  const { data: projectsData } = useList('projects', { limit: 200 });
-  const allProjects = projectsData?.data || [];
+  const allProjects = useList('projects', { limit: 200 }).data?.data || [];
+  const allCustomers = useList('customers', { limit: 200 }).data?.data || [];
 
-  const [arsNumber, setArsNumber] = useState(shipment.arsNumber || '');
-  const [nfkRef, setNfkRef] = useState(shipment.nfkRef || '');
-  const [containerCount, setContainerCount] = useState(
-    shipment.containerCount != null ? String(Number(shipment.containerCount)) : '',
-  );
+  const [form, setForm] = useState({
+    shipmentNumber: shipment.shipmentNumber || '',
+    arsNumber: shipment.arsNumber || '',
+    entryNumber: shipment.entryNumber || '',
+    blNumber: shipment.blNumber || '',
+    nfkRef: shipment.nfkRef || '',
+    containerNumber: shipment.containerNumber || '',
+    containerType: shipment.containerType || '',
+    containerCount: shipment.containerCount != null ? String(Number(shipment.containerCount)) : '',
+    weightKg: shipment.weightKg ?? '',
+    cartonCount: shipment.cartonCount ?? '',
+    commodity: shipment.commodity || '',
+    carrier: shipment.carrier || '',
+    vessel: shipment.vessel || '',
+    voyage: shipment.voyage || '',
+    originPort: shipment.originPort || '',
+    destinationPort: shipment.destinationPort || '',
+    countryOfOrigin: shipment.countryOfOrigin || '',
+    customerId: shipment.customer?.id || '',
+  });
   const [projectIds, setProjectIds] = useState((shipment.projects || []).map((p) => p.id));
   const [saving, setSaving] = useState(false);
 
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const toggleProject = (id) =>
     setProjectIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+
+  // Plain render helper (NOT a component) so inputs keep focus while typing.
+  const field = (k, label, ph, type = 'text') => (
+    <div>
+      <Label>{label}</Label>
+      <Input type={type} value={form[k]} onChange={set(k)} placeholder={ph} />
+    </div>
+  );
+
+  const num = (v) => (v === '' || v == null ? null : Number(v));
 
   const save = async () => {
     setSaving(true);
     try {
       await http.patch(`/shipments/${shipment.id}`, {
-        arsNumber: arsNumber || null,
-        nfkRef: nfkRef || null,
-        containerCount: containerCount === '' ? undefined : Number(containerCount),
+        shipmentNumber: form.shipmentNumber || null,
+        arsNumber: form.arsNumber || null,
+        entryNumber: form.entryNumber || null,
+        blNumber: form.blNumber || null,
+        nfkRef: form.nfkRef || null,
+        containerNumber: form.containerNumber || null,
+        containerType: form.containerType || null,
+        containerCount: form.containerCount === '' ? undefined : Number(form.containerCount),
+        weightKg: num(form.weightKg),
+        cartonCount: num(form.cartonCount),
+        commodity: form.commodity || null,
+        carrier: form.carrier || null,
+        vessel: form.vessel || null,
+        voyage: form.voyage || null,
+        originPort: form.originPort || null,
+        destinationPort: form.destinationPort || null,
+        countryOfOrigin: form.countryOfOrigin || null,
+        customerId: form.customerId || null,
         projectIds,
       });
       await qc.invalidateQueries({ queryKey: ['shipments'] });
-      toast.success('Shipment updated');
+      toast.success('Shipment saved');
     } catch {
-      toast.error('Update failed');
+      toast.error('Save failed');
     } finally {
       setSaving(false);
     }
@@ -71,31 +112,52 @@ function AssignCard({ shipment }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FolderKanban className="h-4 w-4 text-muted-foreground" /> Assign details
+          <FolderKanban className="h-4 w-4 text-muted-foreground" /> Edit & assign
         </CardTitle>
+        <CardDescription>Fix anything the AI missed, then assign the customer &amp; projects.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
+        {/* Identifiers */}
         <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <Label>ARS #</Label>
-            <Input value={arsNumber} onChange={(e) => setArsNumber(e.target.value)} placeholder="e.g. Ars-060-26" />
-          </div>
-          <div>
-            <Label>NFK Ref</Label>
-            <Input value={nfkRef} onChange={(e) => setNfkRef(e.target.value)} placeholder="e.g. 281/24-25" />
-          </div>
-          <div>
-            <Label>Containers</Label>
-            <Input
-              type="number"
-              step="0.5"
-              value={containerCount}
-              onChange={(e) => setContainerCount(e.target.value)}
-              placeholder="e.g. 0.5, 1, 5"
-            />
-          </div>
+          {field('shipmentNumber', 'Shipment #', 'e.g. 550773455')}
+          {field('arsNumber', 'ARS #', 'e.g. Ars-060-26')}
+          {field('entryNumber', 'Entry #', 'e.g. 791-5968629-9')}
+          {field('blNumber', 'B/L #', 'e.g. KHI000274771')}
+          {field('nfkRef', 'NFK Ref', 'e.g. 281/24-25')}
+          {field('containerNumber', 'Container #', 'e.g. TCNU5487540')}
         </div>
 
+        {/* Cargo */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {field('containerType', 'Container type', 'e.g. 40HC')}
+          {field('containerCount', 'Containers', 'e.g. 0.5, 1, 5', 'number')}
+          {field('cartonCount', 'Cartons', 'e.g. 1029', 'number')}
+          {field('weightKg', 'Weight (kg)', 'e.g. 13500', 'number')}
+          {field('countryOfOrigin', 'Country of origin', 'e.g. PK')}
+          {field('commodity', 'Commodity', 'e.g. Mens Pullover')}
+        </div>
+
+        {/* Logistics */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {field('carrier', 'Carrier', 'e.g. NILEDUTCH LION')}
+          {field('vessel', 'Vessel', 'e.g. MAERSK ATLANTA')}
+          {field('voyage', 'Voyage', 'e.g. 614W')}
+          {field('originPort', 'Origin', 'e.g. Qasim')}
+          {field('destinationPort', 'Destination', 'e.g. Savannah')}
+        </div>
+
+        {/* Customer */}
+        <div className="sm:max-w-xs">
+          <Label>Customer</Label>
+          <Select value={form.customerId} onChange={set('customerId')}>
+            <option value="">— none —</option>
+            {allCustomers.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </Select>
+        </div>
+
+        {/* Projects */}
         <div>
           <Label>Projects (this shipment serves)</Label>
           {allProjects.length ? (
@@ -116,16 +178,14 @@ function AssignCard({ shipment }) {
               })}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No projects yet. Create projects first, then assign them here.
-            </p>
+            <p className="text-sm text-muted-foreground">No projects yet — create them in Projects first.</p>
           )}
           <p className="mt-1.5 text-xs text-muted-foreground">{projectIds.length} selected</p>
         </div>
 
         <div className="flex justify-end">
           <Button onClick={save} loading={saving}>
-            <Save className="h-4 w-4" /> Save
+            <Save className="h-4 w-4" /> Save shipment
           </Button>
         </div>
       </CardContent>

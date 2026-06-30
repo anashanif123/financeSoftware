@@ -79,6 +79,7 @@ async function matchOrCreateShipment(extracted) {
       carrier: extracted.carrier || null,
       originPort: extracted.originPort || null,
       destinationPort: extracted.destinationPort || null,
+      countryOfOrigin: extracted.countryOfOrigin || null,
       commodity: extracted.commodity || null,
       weightKg: extracted.weightKg || null,
       cartonCount: extracted.cartonCount || null,
