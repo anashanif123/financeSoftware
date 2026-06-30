@@ -227,8 +227,15 @@ export async function processEmail(connection, msg) {
   }
 
   // 2) Payment confirmation → match invoice → record payment (Module 13).
-  if (email.category === 'PAYMENT_CONFIRMATION') {
-    await tryAutoPayment(email);
+  // Read the email body AND any attached receipt (bank wire PDF / image), since
+  // clients often send confirmation as an attachment with little body text.
+  const paymentDocs = await prisma.document.findMany({
+    where: { emailId: email.id },
+    select: { extractedText: true, extractedData: true },
+  });
+  const hasPaymentDoc = paymentDocs.some((d) => d.extractedData?.documentType === 'PAYMENT_CONFIRMATION');
+  if (email.category === 'PAYMENT_CONFIRMATION' || hasPaymentDoc) {
+    await tryAutoPayment(email, paymentDocs);
   }
 
   // 3) Dispute keywords → open a dispute (Module 14).
@@ -255,8 +262,23 @@ export async function processEmail(connection, msg) {
 // nothing and leave a warning so a human can reconcile manually.
 const AUTO_PAYMENT_MIN_CONFIDENCE = 0.8;
 
-async function tryAutoPayment(email) {
-  const info = await extractPaymentInfo({ subject: email.subject, body: email.body });
+async function tryAutoPayment(email, docs = []) {
+  // Feed the body + any attached-receipt text into the payment extractor.
+  const docText = docs.map((d) => d.extractedText).filter(Boolean).join('\n');
+  const info = await extractPaymentInfo({
+    subject: email.subject,
+    body: `${email.body || ''}\n${docText}`.slice(0, 6000),
+  });
+  // Fallback: an image receipt has no parseable text, but the vision OCR already
+  // captured the invoice number / total into the document's extractedData.
+  if (!info.invoiceNumber) {
+    const num = docs.map((d) => d.extractedData?.invoiceNumbers?.[0]).find(Boolean);
+    if (num) info.invoiceNumber = num;
+  }
+  if (!info.amount) {
+    const amt = docs.map((d) => d.extractedData?.totalAmount).find(Boolean);
+    if (amt) info.amount = amt;
+  }
   if (!info?.amount) return;
 
   const match = await findInvoiceForPayment({
