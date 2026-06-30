@@ -23,14 +23,17 @@ function sumBaseFromItems(items = []) {
   );
 }
 
-// Resolve container count for PER_CONTAINER commission, preferring the linked shipment.
-async function resolveContainerCount(shipmentId, fallback = 1) {
-  if (!shipmentId) return fallback;
+// Container count for PER_CONTAINER commission. An explicit per-invoice value — the
+// customer's SHARE of a shared shipment (e.g. 2 of 10 containers) — wins; otherwise
+// fall back to the shipment's total container count.
+async function resolveContainerCount(shipmentId, explicit) {
+  if (explicit != null && explicit !== '') return Number(explicit);
+  if (!shipmentId) return 1;
   const s = await prisma.shipment.findUnique({
     where: { id: shipmentId },
     select: { containerCount: true },
   });
-  return s?.containerCount ?? fallback;
+  return s?.containerCount != null ? Number(s.containerCount) : 1;
 }
 
 export async function listInvoices(query, meta) {
@@ -72,7 +75,7 @@ export async function createInvoice(input, actorId) {
   } = input;
 
   const baseCost = items.length ? sumBaseFromItems(items) : round2(input.baseCost || 0);
-  const containerCount = await resolveContainerCount(shipmentId, input.containerCount || 1);
+  const containerCount = await resolveContainerCount(shipmentId, input.containerCount);
   const { commissionAmount, totalAmount } = computeCommission({
     baseCost,
     type: commissionType,
@@ -90,6 +93,7 @@ export async function createInvoice(input, actorId) {
         baseCost,
         commissionType,
         commissionRate,
+        containerCount,
         commissionAmount,
         totalAmount,
         status: 'DRAFT',
@@ -129,7 +133,8 @@ export async function recalcInvoice(id, { commissionType, commissionRate } = {},
   const type = commissionType ?? invoice.commissionType;
   const rate = commissionRate ?? toNumber(invoice.commissionRate);
   const baseCost = invoice.items.length ? sumBaseFromItems(invoice.items) : toNumber(invoice.baseCost);
-  const containerCount = invoice.shipment?.containerCount ?? 1;
+  // Use THIS invoice's own container share (set at creation), not the whole shipment.
+  const containerCount = invoice.containerCount ?? invoice.shipment?.containerCount ?? 1;
   const { commissionAmount, totalAmount } = computeCommission({ baseCost, type, rate, containerCount });
 
   const updated = await prisma.invoice.update({

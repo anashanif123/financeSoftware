@@ -334,6 +334,7 @@ model Invoice {
   baseCost         Decimal        @default(0) @db.Decimal(14, 2) // duties + freight + broker charges
   commissionType   CommissionType @default(PER_CONTAINER)
   commissionRate   Decimal        @default(0) @db.Decimal(14, 2) // % or per-container amount or flat
+  containerCount   Float          @default(1) // THIS invoice's share of the shipment's containers
   commissionAmount Decimal        @default(0) @db.Decimal(14, 2) // computed
   totalAmount      Decimal        @default(0) @db.Decimal(14, 2) // baseCost + commissionAmount
   amountPaid       Decimal        @default(0) @db.Decimal(14, 2)

@@ -31,6 +31,7 @@ function NewInvoiceModal({ open, onClose }) {
     shipmentId: '',
     projectId: '',
     baseCost: '',
+    containerCount: '1',
     commissionType: 'PER_CONTAINER',
     commissionRate: '1400',
     currency: 'USD',
@@ -38,7 +39,8 @@ function NewInvoiceModal({ open, onClose }) {
   const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  // Picking a shipment pre-fills its customer and first project (operator can change).
+  // Picking a shipment pre-fills its customer, first project and container count
+  // (operator reduces the containers to this customer's share for a split shipment).
   const onShipment = (e) => {
     const id = e.target.value;
     const ship = (shipments?.data || []).find((s) => s.id === id);
@@ -47,8 +49,20 @@ function NewInvoiceModal({ open, onClose }) {
       shipmentId: id,
       customerId: ship?.customer?.id || f.customerId,
       projectId: ship?.projects?.[0]?.id || f.projectId,
+      containerCount: ship?.containerCount != null ? String(Number(ship.containerCount)) : f.containerCount,
     }));
   };
+
+  // Live preview of the total before saving.
+  const previewCommission =
+    form.commissionType === 'FLAT'
+      ? Number(form.commissionRate) || 0
+      : form.commissionType === 'PER_CONTAINER'
+        ? (Number(form.commissionRate) || 0) * (Number(form.containerCount) || 0)
+        : form.commissionType === 'PERCENTAGE'
+          ? ((Number(form.baseCost) || 0) * (Number(form.commissionRate) || 0)) / 100
+          : 0;
+  const previewTotal = (Number(form.baseCost) || 0) + previewCommission;
 
   const submit = async () => {
     setSaving(true);
@@ -59,6 +73,7 @@ function NewInvoiceModal({ open, onClose }) {
         projectId: form.projectId || null,
         currency: form.currency,
         baseCost: Number(form.baseCost) || 0,
+        containerCount: form.containerCount === '' ? undefined : Number(form.containerCount),
         commissionType: form.commissionType,
         commissionRate: Number(form.commissionRate) || 0,
       });
@@ -109,11 +124,18 @@ function NewInvoiceModal({ open, onClose }) {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label>Base cost (duties + broker)</Label>
+            <Label>Base cost (this customer&apos;s duties + broker)</Label>
             <Input type="number" step="0.01" value={form.baseCost} onChange={set('baseCost')} placeholder="e.g. 265" />
           </div>
+          <div>
+            <Label>Containers (this customer&apos;s share)</Label>
+            <Input type="number" step="0.5" value={form.containerCount} onChange={set('containerCount')} placeholder="e.g. 0.5, 2, 8" />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label>Commission type</Label>
             <Select value={form.commissionType} onChange={set('commissionType')}>
@@ -128,8 +150,15 @@ function NewInvoiceModal({ open, onClose }) {
           </div>
         </div>
 
+        {/* Live preview */}
+        <div className="space-y-1 rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm">
+          <div className="flex justify-between"><span className="text-muted-foreground">Base cost</span><span className="tabular-nums">{formatCurrency(Number(form.baseCost) || 0)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Commission{form.commissionType === 'PER_CONTAINER' ? ` (${form.commissionRate || 0} × ${form.containerCount || 0} ctr)` : ''}</span><span className="tabular-nums text-primary">{formatCurrency(previewCommission)}</span></div>
+          <div className="flex justify-between border-t border-border pt-1 font-semibold"><span>Total</span><span className="tabular-nums">{formatCurrency(previewTotal)}</span></div>
+        </div>
+
         <p className="text-xs text-muted-foreground">
-          PER CONTAINER uses the shipment&apos;s container count (e.g. 1400 × containers). You can toggle the commission on/off later on the invoice.
+          For a SHARED shipment, set <span className="font-medium">Base cost</span> and <span className="font-medium">Containers</span> to THIS customer&apos;s share — make one invoice per customer. Commission = rate × this customer&apos;s containers.
         </p>
 
         <div className="flex justify-end gap-2 pt-1">
